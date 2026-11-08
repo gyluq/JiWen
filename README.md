@@ -27,7 +27,7 @@ JiWen is a single-user, local-first notebook for Android. It combines quick capt
 | Note list | Full-text search |
 | --- | --- |
 | <img src="docs/screenshots/note-list.png" width="260" alt="Note list"> | <img src="docs/screenshots/search.png" width="260" alt="Full-text search"> |
-| Titles, summaries, tags, update time, and pending / answered status at a glance. Compact, standard, and relaxed densities. | Chinese substring search with highlighted hits, combined with tag, status, and time-range filters. |
+| Titles, summaries, pending / answered status, and update time at a glance. Compact, standard, and relaxed densities. | Chinese substring search with highlighted hits, combined with tag, status, and time-range filters. |
 
 | Note detail | Markdown editor |
 | --- | --- |
