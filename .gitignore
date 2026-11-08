@@ -1,0 +1,36 @@
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- IDE ---
+.idea/
+*.iml
+.vscode/
+
+# --- Flutter / Dart ---
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.g.dart
+*.freezed.dart
+
+# --- Android ---
+android/.gradle/
+android/.kotlin/
+android/local.properties
+android/key.properties
+*.jks
+*.keystore
+*.apk
+*.aab
+
+# --- Local notes / tooling ---
+# Personal requirement docs, environment snapshots and tool state stay local.
+.user/
+.screenshots/
+.trae-html-share-packages/

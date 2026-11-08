@@ -1,0 +1,65 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:jiwen/util/markdown_parser.dart';
+
+void main() {
+  test('an image line right after text becomes its own block', () {
+    final document = parseMarkdown(
+      '正文\n![](attachments/a.jpg)\n',
+    );
+    expect(document.blocks, hasLength(2));
+    expect(document.blocks.first, isA<MdParagraph>());
+    final imageBlock = document.blocks.last as MdParagraph;
+    expect(imageBlock.children, hasLength(1));
+    expect(
+      (imageBlock.children.single as MdImage).url,
+      'attachments/a.jpg',
+    );
+  });
+
+  test('an image between paragraphs stays a media block', () {
+    final document = parseMarkdown(
+      '第一段\n\n![](attachments/a.jpg)\n\n第二段',
+    );
+    expect(document.blocks, hasLength(3));
+    final imageBlock = document.blocks[1] as MdParagraph;
+    expect(imageBlock.children.single, isA<MdImage>());
+  });
+
+  test('an image inside a text line stays inline', () {
+    final document = parseMarkdown('看图 ![](attachments/a.jpg) 结尾');
+    expect(document.blocks, hasLength(1));
+    final paragraph = document.blocks.single as MdParagraph;
+    expect(paragraph.children.whereType<MdImage>(), hasLength(1));
+  });
+
+  test('an image line inside a code block is not split out', () {
+    final document = parseMarkdown(
+      '```\n![](attachments/a.jpg)\n```',
+    );
+    expect(document.blocks, hasLength(1));
+    expect(document.blocks.single, isA<MdCodeBlock>());
+  });
+
+  test('outline keeps H1-H3 headings and their block indexes', () {
+    final document = parseMarkdown(
+      '# 一\n正文\n## 二\n### 三\n```\n## 代码\n```',
+    );
+    final outline = extractOutline(document);
+    expect(outline.map((entry) => entry.text), ['一', '二', '三']);
+    expect(outline.map((entry) => entry.level), [1, 2, 3]);
+    expect(outline.map((entry) => entry.blockIndex), [0, 2, 3]);
+  });
+
+  test('outline ignores headings with no visible text', () {
+    final document = parseMarkdown('# **一**\n## \n###\n');
+    final outline = extractOutline(document);
+    expect(outline.map((entry) => entry.text), ['一']);
+  });
+
+  test('first search hit reports the block that contains it', () {
+    final document = parseMarkdown('# 标题\n\n正文关键词\n\n结尾');
+    expect(firstMatchBlock(document, '关键词'), 1);
+    expect(firstMatchBlock(document, '不存在'), isNull);
+    expect(firstMatchBlock(document, '  '), isNull);
+  });
+}
