@@ -112,8 +112,14 @@ class _JiWenAppState extends State<JiWenApp> with WidgetsBindingObserver {
           navigatorKey: _navigatorKey,
           title: '记问',
           debugShowCheckedModeBanner: false,
-          theme: buildAppTheme(AppPalette.light),
-          darkTheme: buildAppTheme(AppPalette.dark),
+          theme: buildAppTheme(
+            AppPalette.light,
+            fontFamily: AppSettings.instance.fontFamily.family,
+          ),
+          darkTheme: buildAppTheme(
+            AppPalette.dark,
+            fontFamily: AppSettings.instance.fontFamily.family,
+          ),
           themeMode: AppSettings.instance.themeMode.materialMode,
           builder: (context, child) {
             // Keep the hand-tuned tokens in sync with the resolved theme (F-46).

@@ -32,6 +32,20 @@ enum AppFontSize {
   final double scale;
 }
 
+/// Font families offered by the appearance settings.
+///
+/// The serif family is bundled so Chinese text renders the same on every
+/// device, at the cost of a larger APK.
+enum AppFontFamily {
+  system('系统默认', null),
+  serif('宋体', 'NotoSerifSC');
+
+  const AppFontFamily(this.label, this.family);
+
+  final String label;
+  final String? family;
+}
+
 /// Default list view at launch (F-48).
 enum AppHomeView {
   all('全部笔记'),
@@ -67,12 +81,14 @@ class AppSettings extends ChangeNotifier {
 
   static const _keyTheme = 'pref_theme_mode';
   static const _keyFontSize = 'pref_font_size';
+  static const _keyFontFamily = 'pref_font_family';
   static const _keyHomeView = 'pref_home_view';
   static const _keyOpenNew = 'pref_open_new_note';
   static const _keyListDensity = 'pref_list_density';
 
   AppThemeChoice themeMode = AppThemeChoice.system;
   AppFontSize fontSize = AppFontSize.normal;
+  AppFontFamily fontFamily = AppFontFamily.system;
   AppHomeView homeView = AppHomeView.all;
   bool openToNewNote = false;
   AppListDensity listDensity = AppListDensity.compact;
@@ -92,6 +108,12 @@ class AppSettings extends ChangeNotifier {
       AppFontSize.values,
       db.getSetting(_keyFontSize),
       AppFontSize.normal,
+      (value) => value.name,
+    );
+    fontFamily = _enumBy(
+      AppFontFamily.values,
+      db.getSetting(_keyFontFamily),
+      AppFontFamily.system,
       (value) => value.name,
     );
     homeView = _enumBy(
@@ -120,6 +142,13 @@ class AppSettings extends ChangeNotifier {
     if (fontSize == value) return;
     fontSize = value;
     NotesDb.instance.setSetting(_keyFontSize, value.name);
+    notifyListeners();
+  }
+
+  void setFontFamily(AppFontFamily value) {
+    if (fontFamily == value) return;
+    fontFamily = value;
+    NotesDb.instance.setSetting(_keyFontFamily, value.name);
     notifyListeners();
   }
 

@@ -220,6 +220,7 @@ class _TagPickerSheetState extends State<_TagPickerSheet> {
                             for (final tag in _visible)
                               TagChip(
                                 label: tag.name,
+                                colorValue: tag.color,
                                 selected: _selected.contains(tag.id),
                                 onTap: () => _toggle(tag.id),
                               ),

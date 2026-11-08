@@ -475,6 +475,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
                       itemBuilder: (context, index) {
                         final note = notes[index];
                         return _SwipeToDelete(
+                          key: ValueKey<String>(note.id),
                           onDelete: () => _deleteWithUndo(note),
                           child: NoteListTile(
                             note: note,
@@ -527,6 +528,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
               for (final tag in _tags) ...[
                 TagChip(
                   label: tag.name,
+                  colorValue: tag.color,
                   selected: _tagId == tag.id,
                   onTap: () => _onTagSelected(tag.id),
                   onRemove: _tagId == tag.id
@@ -679,7 +681,7 @@ class _NoteListScreenState extends State<NoteListScreen> {
 /// the search results or recycle bin, so the system back gesture and those
 /// lists stay untouched.
 class _SwipeToDelete extends StatefulWidget {
-  const _SwipeToDelete({required this.child, required this.onDelete});
+  const _SwipeToDelete({super.key, required this.child, required this.onDelete});
 
   final Widget child;
   final VoidCallback onDelete;
@@ -701,6 +703,12 @@ class _SwipeToDeleteState extends State<_SwipeToDelete>
   void dispose() {
     _reveal.dispose();
     super.dispose();
+  }
+
+  void _handleDelete() {
+    // Reset before removing so a row that stays (e.g. undo path) is closed.
+    _reveal.value = 0;
+    widget.onDelete();
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
@@ -738,7 +746,7 @@ class _SwipeToDeleteState extends State<_SwipeToDelete>
                 child: Material(
                   color: AppColors.danger,
                   child: InkWell(
-                    onTap: widget.onDelete,
+                    onTap: _handleDelete,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [

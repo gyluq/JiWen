@@ -33,4 +33,5 @@ android/key.properties
 # Personal requirement docs, environment snapshots and tool state stay local.
 .user/
 .screenshots/
+.trae/
 .trae-html-share-packages/

@@ -203,7 +203,8 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
       spacing: 8,
       runSpacing: 8,
       children: [
-        for (final tag in _tags) TagChip(label: tag.name, onTap: _editTags),
+        for (final tag in _tags)
+          TagChip(label: tag.name, colorValue: tag.color, onTap: _editTags),
         TagChip(label: '＋ 添加标签', onTap: _editTags),
       ],
     );

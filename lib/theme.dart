@@ -86,13 +86,21 @@ class AppColors {
   static Color get danger => _active.danger;
 }
 
-ThemeData buildAppTheme(AppPalette palette) {
+ThemeData buildAppTheme(AppPalette palette, {String? fontFamily}) {
   final dark = palette == AppPalette.dark;
   final brightness = dark ? Brightness.dark : Brightness.light;
   final base = dark
       ? ThemeData.dark(useMaterial3: true)
       : ThemeData.light(useMaterial3: true);
-  return base.copyWith(
+  final themed = fontFamily == null
+      ? base
+      : base.copyWith(
+          textTheme: base.textTheme.apply(fontFamily: fontFamily),
+          primaryTextTheme: base.primaryTextTheme.apply(
+            fontFamily: fontFamily,
+          ),
+        );
+  return themed.copyWith(
     brightness: brightness,
     scaffoldBackgroundColor: palette.bg,
     colorScheme: base.colorScheme.copyWith(
@@ -116,11 +124,13 @@ ThemeData buildAppTheme(AppPalette palette) {
       titleTextStyle: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w600,
+        fontFamily: fontFamily,
         color: palette.ink,
       ),
       contentTextStyle: TextStyle(
         fontSize: 13,
         height: 1.7,
+        fontFamily: fontFamily,
         color: palette.ink2,
       ),
     ),

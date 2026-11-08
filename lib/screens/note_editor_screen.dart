@@ -482,7 +482,11 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                       runSpacing: 8,
                       children: [
                         for (final tag in _tags)
-                          TagChip(label: tag.name, onTap: _editTags),
+                          TagChip(
+                            label: tag.name,
+                            colorValue: tag.color,
+                            onTap: _editTags,
+                          ),
                         TagChip(label: '＋ 添加标签', onTap: _editTags),
                       ],
                     ),

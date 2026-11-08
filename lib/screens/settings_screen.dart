@@ -75,6 +75,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: _pickThemeMode,
           ),
           _choiceTile(
+            title: '字体',
+            value: _settings.fontFamily.label,
+            subtitle: '系统默认，或内置宋体',
+            onTap: _pickFontFamily,
+          ),
+          _choiceTile(
             title: '正文字号',
             value: _settings.fontSize.label,
             subtitle: '列表摘要与详情正文同时生效',
@@ -212,6 +218,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (picked == null || !mounted) return;
     _settings.setListDensity(picked);
+    setState(() {});
+  }
+
+  Future<void> _pickFontFamily() async {
+    final picked = await showModalBottomSheet<AppFontFamily>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '字体',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                ),
+              ),
+              for (final family in AppFontFamily.values)
+                ListTile(
+                  title: Text(
+                    '${family.label} · 正文示例',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                      fontFamily: family.family,
+                      color: AppColors.ink2,
+                    ),
+                  ),
+                  trailing: family == _settings.fontFamily
+                      ? Icon(
+                          Icons.check_rounded,
+                          size: 18,
+                          color: AppColors.accent,
+                        )
+                      : null,
+                  onTap: () => Navigator.of(sheetContext).pop(family),
+                ),
+              const SizedBox(height: 6),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    _settings.setFontFamily(picked);
     setState(() {});
   }
 

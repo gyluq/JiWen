@@ -7,6 +7,7 @@ import 'package:sqlite3/sqlite3.dart';
 
 import '../models/note.dart';
 import '../models/tag.dart';
+import '../util/tag_colors.dart';
 
 /// Segments available on the note list (requirement F-05/F-06/R-02).
 enum NoteFilter { all, todo, done, pinned }
@@ -62,6 +63,7 @@ class NotesDb {
       CREATE TABLE IF NOT EXISTS tag (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
+        color INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL
       )
     ''');
@@ -94,6 +96,22 @@ class NotesDb {
       )
     ''');
     _db = db;
+    _ensureTagColorColumn(db);
+  }
+
+  /// Adds the color column to databases created by earlier builds.
+  void _ensureTagColorColumn(Database db) {
+    final columns = db.select('PRAGMA table_info(tag)');
+    final hasColor = columns.any((row) => row['name'] == 'color');
+    if (hasColor) return;
+    db.execute('ALTER TABLE tag ADD COLUMN color INTEGER NOT NULL DEFAULT 0');
+    for (final row in db.select('SELECT id, name FROM tag')) {
+      final name = row['name'] as String? ?? '';
+      db.execute('UPDATE tag SET color = ? WHERE id = ?', [
+        tagColorForName(name),
+        row['id'],
+      ]);
+    }
   }
 
   /// Lists notes for the current segment, keyword, tag, favorites and the
@@ -209,11 +227,11 @@ class NotesDb {
   /// Lists tags with the number of live notes attached to each (F-22).
   List<Tag> listTags() {
     final rows = _database.select('''
-      SELECT t.id AS id, t.name AS name, count(n.id) AS note_count
+      SELECT t.id AS id, t.name AS name, t.color AS color, count(n.id) AS note_count
       FROM tag t
       LEFT JOIN note_tag nt ON nt.tag_id = t.id
       LEFT JOIN notes n ON n.id = nt.note_id AND n.deleted_at IS NULL
-      GROUP BY t.id, t.name
+      GROUP BY t.id, t.name, t.color
       ORDER BY note_count DESC, t.name COLLATE NOCASE
     ''');
     return rows.map(Tag.fromRow).toList();
@@ -227,7 +245,8 @@ class NotesDb {
     if (ids.isEmpty) return const {};
     final placeholders = List.filled(ids.length, '?').join(',');
     final rows = _database.select('''
-      SELECT nt.note_id AS note_id, t.id AS id, t.name AS name, 0 AS note_count
+      SELECT nt.note_id AS note_id, t.id AS id, t.name AS name,
+             t.color AS color, 0 AS note_count
       FROM note_tag nt
       JOIN tag t ON t.id = nt.tag_id
       WHERE nt.note_id IN ($placeholders)
@@ -248,7 +267,8 @@ class NotesDb {
 
   Tag? findTagByName(String name) {
     final rows = _database.select(
-      'SELECT t.id AS id, t.name AS name, 0 AS note_count FROM tag t WHERE t.name = ? LIMIT 1',
+      'SELECT t.id AS id, t.name AS name, t.color AS color, '
+      '0 AS note_count FROM tag t WHERE t.name = ? LIMIT 1',
       [name.trim()],
     );
     if (rows.isEmpty) return null;
@@ -261,12 +281,26 @@ class NotesDb {
     final existing = findTagByName(trimmed);
     if (existing != null) return existing;
 
-    final tag = Tag(id: newTagId(), name: trimmed);
+    final tag = Tag(
+      id: newTagId(),
+      name: trimmed,
+      color: tagColorForName(trimmed),
+    );
     _database.execute(
-      'INSERT INTO tag (id, name, created_at) VALUES (?, ?, ?)',
-      [tag.id, tag.name, DateTime.now().millisecondsSinceEpoch],
+      'INSERT INTO tag (id, name, color, created_at) VALUES (?, ?, ?, ?)',
+      [
+        tag.id,
+        tag.name,
+        tag.color,
+        DateTime.now().millisecondsSinceEpoch,
+      ],
     );
     return tag;
+  }
+
+  /// Sets the color shown for [id] across every tagged note.
+  void updateTagColor(String id, int color) {
+    _database.execute('UPDATE tag SET color = ? WHERE id = ?', [color, id]);
   }
 
   /// Renames a tag globally. Returns false when the name is empty or taken.
@@ -583,9 +617,14 @@ class NotesDb {
           }
         }
         _database.execute(
-          'INSERT INTO tag (id, name, created_at) VALUES (?, ?, ?) '
+          'INSERT INTO tag (id, name, color, created_at) VALUES (?, ?, ?, ?) '
           'ON CONFLICT(id) DO UPDATE SET name = excluded.name',
-          [id, name, _millisOf(row['created_at'], now)],
+          [
+            id,
+            name,
+            (row['color'] as int?) ?? tagColorForName(name),
+            _millisOf(row['created_at'], now),
+          ],
         );
         tagIdMap[id] = id;
       }

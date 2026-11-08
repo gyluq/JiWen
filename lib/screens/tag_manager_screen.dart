@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/notes_db.dart';
 import '../models/tag.dart';
 import '../theme.dart';
+import '../util/tag_colors.dart';
 import '../widgets/note_action_sheet.dart';
 import '../widgets/tag_chip.dart';
 
@@ -82,6 +83,71 @@ class _TagManagerScreenState extends State<TagManagerScreen> {
     _reload();
   }
 
+  Future<void> _pickTagColor(Tag tag) async {
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '标签颜色',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                child: Wrap(
+                  spacing: 14,
+                  runSpacing: 14,
+                  children: [
+                    for (final value in kTagColorValues)
+                      InkWell(
+                        onTap: () => Navigator.of(sheetContext).pop(value),
+                        borderRadius: BorderRadius.circular(999),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Color(value),
+                            shape: BoxShape.circle,
+                          ),
+                          child: tag.color == value
+                              ? const Icon(
+                                  Icons.check_rounded,
+                                  size: 18,
+                                  color: Color(0xFFFFF8F1),
+                                )
+                              : null,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    NotesDb.instance.updateTagColor(tag.id, picked);
+    _reload();
+  }
+
   Future<String?> _promptTagName({
     required String title,
     String initial = '',
@@ -132,7 +198,7 @@ class _TagManagerScreenState extends State<TagManagerScreen> {
           Padding(
             padding: EdgeInsets.fromLTRB(20, 0, 20, 4),
             child: Text(
-              '点击标签可重命名；删除标签不会删除笔记。',
+              '点击标签可重命名；点颜色圆点可设置标签颜色。',
               style: TextStyle(fontSize: 12, color: AppColors.muted),
             ),
           ),
@@ -152,7 +218,27 @@ class _TagManagerScreenState extends State<TagManagerScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           child: Row(
                             children: [
-                              TagChip(label: tag.name),
+                              TagChip(
+                                label: tag.name,
+                                colorValue: tag.color,
+                              ),
+                              const SizedBox(width: 6),
+                              IconButton(
+                                onPressed: () => _pickTagColor(tag),
+                                tooltip: '标签颜色',
+                                visualDensity: VisualDensity.compact,
+                                icon: Container(
+                                  width: 18,
+                                  height: 18,
+                                  decoration: BoxDecoration(
+                                    color: tag.color == 0
+                                        ? AppColors.tagBg
+                                        : Color(tag.color),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: AppColors.line),
+                                  ),
+                                ),
+                              ),
                               const Spacer(),
                               Text(
                                 '${tag.noteCount} 条',

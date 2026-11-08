@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -205,15 +207,14 @@ Future<void> shareNoteText(BuildContext context, Note note) async {
 }
 
 void showActionToast(BuildContext context, String message) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        content: Text(message, style: const TextStyle(fontSize: 13)),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(milliseconds: 1400),
-      ),
-    );
+  _showToast(
+    context,
+    SnackBar(
+      content: Text(message, style: const TextStyle(fontSize: 13)),
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(milliseconds: 1400),
+    ),
+  );
 }
 
 /// Toast with a one-tap undo, used after a note is moved to the trash (R-02).
@@ -226,18 +227,32 @@ void showUndoToast(
   VoidCallback onUndo, {
   Duration duration = const Duration(seconds: 4),
 }) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        content: Text(message, style: const TextStyle(fontSize: 13)),
-        behavior: SnackBarBehavior.floating,
-        duration: duration,
-        action: SnackBarAction(
-          label: '撤销',
-          textColor: const Color(0xFFF6E4DB),
-          onPressed: onUndo,
-        ),
+  _showToast(
+    context,
+    SnackBar(
+      content: Text(message, style: const TextStyle(fontSize: 13)),
+      behavior: SnackBarBehavior.floating,
+      duration: duration,
+      action: SnackBarAction(
+        label: '撤销',
+        textColor: const Color(0xFFF6E4DB),
+        onPressed: onUndo,
       ),
-    );
+    ),
+  );
+}
+
+/// Shows [snackBar] and closes it after its own duration.
+///
+/// ScaffoldMessenger schedules this itself, but the timer proved unreliable
+/// on device, so an explicit timer guarantees dismissal after navigation.
+void _showToast(BuildContext context, SnackBar snackBar) {
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.hideCurrentSnackBar();
+  final controller = messenger.showSnackBar(snackBar);
+  var closed = false;
+  controller.closed.whenComplete(() => closed = true);
+  Timer(snackBar.duration + const Duration(milliseconds: 150), () {
+    if (!closed && messenger.mounted) controller.close();
+  });
 }

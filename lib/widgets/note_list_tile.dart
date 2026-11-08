@@ -69,7 +69,7 @@ class NoteListTile extends StatelessWidget {
     final title = note.title.isEmpty ? '无标题' : note.title;
     final excerpt = searchSnippet(note.body, query);
     final density = AppSettings.instance.listDensity;
-    return InkWell(
+    final tile = InkWell(
       onTap: onTap,
       onLongPress: onLongPress,
       child: Padding(
@@ -77,11 +77,28 @@ class NoteListTile extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text.rich(
-              _highlighted(title, _titleStyle),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: _titleStyle,
+            Row(
+              children: [
+                Expanded(
+                  child: Text.rich(
+                    _highlighted(title, _titleStyle),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _titleStyle,
+                  ),
+                ),
+                if (note.pinned) ...[
+                  const SizedBox(width: 6),
+                  Tooltip(
+                    message: '已置顶',
+                    child: Icon(
+                      Icons.push_pin,
+                      size: 14,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                ],
+              ],
             ),
             if (excerpt.isNotEmpty) ...[
               const SizedBox(height: 3),
@@ -105,10 +122,10 @@ class NoteListTile extends StatelessWidget {
                       for (final tag in tags)
                         TagChip(
                           label: tag.name,
+                          colorValue: tag.color,
                           dense: true,
                           onTap: onTagTap == null ? null : () => onTagTap!(tag),
                         ),
-                      _StatusPill(note: note),
                     ],
                   ),
                 ),
@@ -123,30 +140,6 @@ class NoteListTile extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.note});
-
-  final Note note;
-
-  @override
-  Widget build(BuildContext context) {
-    final todo = note.status == NoteStatus.todo;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: todo ? AppColors.accentSoft : AppColors.tagBg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        todo ? '待解答' : '已解答',
-        style: TextStyle(
-          fontSize: 11,
-          color: todo ? AppColors.accentInk : AppColors.muted,
-        ),
-      ),
-    );
+    return tile;
   }
 }
