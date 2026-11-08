@@ -1,10 +1,14 @@
 # 记问 JiWen
 
 <p align="center">
-  <img src="design/icon/app_icon.png" width="96" alt="记问图标">
+  <img src="design/icon/app_icon.png" width="96" alt="JiWen icon">
 </p>
 
-<p align="center">一款完全离线的 Android 个人知识笔记应用，专注于「记录快、找得到、数据不丢」。</p>
+<p align="center">A fully offline Android notebook for personal knowledge — fast capture, Markdown editing, tags, Chinese full-text search, and local backups.</p>
+
+<p align="center">
+  <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a>
+</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Flutter-3.47.9-02569B?logo=flutter&logoColor=white" alt="Flutter">
@@ -14,89 +18,87 @@
   <img src="https://img.shields.io/github/v/release/gyluq/JiWen?display_name=tag" alt="Release">
 </p>
 
-## 简介
+## Overview
 
-记问是一款单人自用的本地知识库。它解决手机自带便签的三个问题：**不能搜索、不能分类、不能导出**。
+JiWen is a single-user, local-first notebook for Android. It combines quick capture, Markdown editing and preview, tag-based organization, instant Chinese full-text search with highlighted hits, three list densities, a note outline, a recycle bin, statistics, and JSON / ZIP backup and export. Notes, images, and backups live in the app's private storage, and the app declares no network permission.
 
-所有笔记、标签、图片和备份都保存在应用私有目录中，应用不声明网络权限，也不依赖任何在线服务。核心价值排序为：记录快 > 找得到 > 数据不丢 > 好看。
+## Screenshots
 
-## 界面
-
-| 笔记列表 | 全文搜索 |
+| Note list | Full-text search |
 | --- | --- |
-| <img src="docs/screenshots/note-list.png" width="260" alt="笔记列表"> | <img src="docs/screenshots/search.png" width="260" alt="全文搜索"> |
-| 标题、摘要、标签、更新时间与「待解答 / 已解答」状态一屏可见，支持紧凑、标准、宽松三档密度。 | 支持中文子串搜索，命中片段高亮，并可组合标签、状态与时间范围筛选。 |
+| <img src="docs/screenshots/note-list.png" width="260" alt="Note list"> | <img src="docs/screenshots/search.png" width="260" alt="Full-text search"> |
+| Titles, summaries, tags, update time, and pending / answered status at a glance. Compact, standard, and relaxed densities. | Chinese substring search with highlighted hits, combined with tag, status, and time-range filters. |
 
-| 详情阅读 | Markdown 编辑 |
+| Note detail | Markdown editor |
 | --- | --- |
-| <img src="docs/screenshots/detail.png" width="260" alt="详情阅读"> | <img src="docs/screenshots/editor.png" width="260" alt="Markdown 编辑"> |
-| 统一渲染管线，代码块可复制，长文使用 Sliver 懒加载，并提供 H1~H3 大纲跳转。 | 工具栏覆盖标题、列表、代码块、加粗、斜体、图片与链接，支持撤销重做和编辑 / 预览切换。 |
+| <img src="docs/screenshots/detail.png" width="260" alt="Note detail"> | <img src="docs/screenshots/editor.png" width="260" alt="Markdown editor"> |
+| One rendering pipeline for reading, export, and preview. Long notes load lazily and an H1–H3 outline jumps between sections. | Toolbar for headings, lists, code blocks, bold, italic, images, and links, with undo / redo and an edit / preview toggle. |
 
 <p align="center">
-  <img src="docs/screenshots/note-list-dark.png" width="260" alt="深色模式">
+  <img src="docs/screenshots/note-list-dark.png" width="260" alt="Dark mode">
   <br>
-  深色模式
+  Dark mode
 </p>
 
-## 功能
+## Features
 
-| 模块 | 能力 |
+| Area | What it does |
 | --- | --- |
-| 记录 | 15 秒内完成一次记录；自动保存与进程被杀后的恢复；待解答 / 已解答状态；置顶与收藏 |
-| Markdown | H1~H3、有序 / 无序列表、代码块（等宽字体、横向滚动、一键复制）、加粗、斜体、链接、图片插入与全屏查看 |
-| 图片 | 相册选择或拍照，长边超过 1600px 自动压缩，删除笔记时清理无引用图片 |
-| 标签 | 标签增删改查，一条笔记可挂多个标签，标签页显示笔记数，删除标签不影响笔记 |
-| 检索 | 标题、正文、标签名全文搜索；中文词语中间截取也能命中；结果高亮；进入详情自动定位首个命中位置；最近 20 条搜索历史 |
-| 筛选与排序 | 标签 + 状态 + 时间范围组合筛选；按最近修改、创建时间或标题排序 |
-| 阅读 | 三档列表密度；笔记大纲（H1~H3 章节跳转与当前位置高亮）；深色模式；正文字号调节 |
-| 数据安全 | 回收站保留 30 天；每日首次启动或累计 50 次修改自动备份，保留最近 5 份；手动备份与恢复 |
-| 导入导出 | 单条笔记导出 Markdown；全部笔记导出 ZIP（含 `assets/` 图片）；JSON 全量备份与回导；粘贴文本按分隔符批量拆分导入；导入 `.txt` / `.md` 文件 |
-| 隐私 | 4~6 位 PIN 应用锁，可启用指纹 / 面容解锁；超时自动锁定；锁定时禁止截屏与最近任务缩略图 |
-| 其他 | 单条笔记 Markdown 分享；`[[标题]]` 内部链接跳转；统计面板（笔记总数、待解答数、标签分布） |
+| Capture | Save a note in seconds; autosave and draft recovery; pending / answered status; pin and favorite notes |
+| Markdown | H1–H3, ordered and unordered lists, code blocks (monospace, horizontal scroll, one-tap copy), bold, italic, links, image insertion and full-screen preview |
+| Images | Pick from the gallery or camera; images wider than 1600 px are compressed; unreferenced files are cleaned up when notes are deleted |
+| Tags | Create, rename, and delete tags; attach multiple tags to a note; tag list shows note counts; deleting a tag keeps its notes |
+| Search | Full-text search across titles, bodies, and tag names; Chinese substrings match even from the middle of a word; highlighted hits; opening a note jumps to the first hit; last 20 search terms are kept |
+| Filter and sort | Combine tag, status, and time range; sort by last modified, creation time, or title |
+| Reading | Three list densities; note outline with H1–H3 navigation and current-section highlight; dark mode; body font size levels |
+| Data safety | Recycle bin with 30-day retention; automatic backup on the first launch of a day or after 50 edits, keeping the latest 5; manual backup and restore |
+| Import and export | Export a note as Markdown; export all notes as a ZIP with an `assets/` folder; full JSON backup and restore; split pasted text into multiple notes by delimiter; import `.txt` / `.md` files |
+| Privacy | 4–6 digit PIN lock with optional fingerprint / face unlock; auto-lock timeout; screenshots and recent-task thumbnails blocked while locked |
+| Extras | Share a note as Markdown; `[[title]]` internal links; statistics for note count, pending notes, and tag distribution |
 
-## 技术栈
+## Tech stack
 
-| 层 | 选型 |
+| Layer | Choice |
 | --- | --- |
-| 框架 | Flutter 3.47.9 / Dart 3.13.7，Material 3 |
-| 存储 | `sqlite3` 本地数据库 + 应用私有目录文件存储 |
-| 图片 | `image_picker`、`path_provider` |
-| 导入导出 | `archive`（ZIP）、`file_picker`、`share_plus` |
-| 安全 | `local_auth`（生物识别）、`crypto`、`flutter_secure_storage` 风格的本地 PIN 校验 |
-| 其他 | `url_launcher`、`scrollable_positioned_list` |
+| Framework | Flutter 3.47.9 / Dart 3.13.7 |
+| Storage | `sqlite3` local database plus app-private file storage |
+| Images | `image_picker`, `path_provider` |
+| Import / export | `archive` (ZIP), `file_picker`, `share_plus` |
+| Security | `local_auth` (biometrics), `crypto` |
+| Other | `url_launcher`, `scrollable_positioned_list` |
 
-Markdown 解析、渲染与编辑逻辑均为项目内自研实现，位于 `lib/util/` 与 `lib/widgets/`。
+Markdown parsing, rendering, and editing are implemented in this repository under `lib/util/` and `lib/widgets/`.
 
-## 项目结构
+## Project layout
 
 ```text
 lib/
-├── data/          # 数据库、设置、附件、备份、导入导出、应用锁
-├── models/        # 笔记与标签模型
-├── screens/       # 列表、详情、编辑、搜索、标签、回收站、统计、设置等页面
-├── util/          # Markdown 解析与编辑、搜索高亮、文本导入、时间格式化
-├── widgets/       # 列表项、标签、Markdown 视图、操作面板
-└── theme.dart     # 共享配色与主题
-test/              # Markdown、搜索高亮、数据工具等单元测试
-design/            # 应用图标与 HTML 交互原型
-docs/screenshots/  # README 截图
+├── data/          # database, settings, attachments, backup, import/export, app lock
+├── models/        # note and tag models
+├── screens/       # list, detail, editor, search, tags, trash, statistics, settings
+├── util/          # Markdown parsing and editing, search highlighting, text import, time formatting
+├── widgets/       # list tiles, tag chips, Markdown view, action sheets
+└── theme.dart     # shared palette and theme
+test/              # unit tests for Markdown, search highlighting, and data tools
+design/            # app icon and HTML interaction prototype
+docs/screenshots/  # README screenshots
 ```
 
-## 构建与运行
+## Build and run
 
-环境要求：Flutter 3.47.9（stable）、Dart 3.13.7、Android SDK 36、JDK 17+。
+Requirements: Flutter 3.47.9 (stable), Dart 3.13.7, Android SDK 36, JDK 17 or newer.
 
 ```bash
 flutter pub get
-flutter run                 # 调试运行
-flutter test                # 单元测试
-flutter build apk --release # 产物：build/app/outputs/flutter-apk/app-release.apk
+flutter run                 # debug build on a device or emulator
+flutter test                # unit tests
+flutter build apk --release # output: build/app/outputs/flutter-apk/app-release.apk
 ```
 
-安装包可从 [Releases](https://github.com/gyluq/JiWen/releases) 下载。当前 release 构建沿用 Flutter 模板的 debug 签名，适合自用侧载；如需上架应用商店，请配置自己的 keystore。
+Installable builds are available on the [Releases](https://github.com/gyluq/JiWen/releases) page. Current release builds use the Flutter template's debug signing config, which is fine for personal side-loading; configure your own keystore before publishing to an app store.
 
-## 数据说明
+## Data and privacy
 
-- 数据库、图片与备份全部位于应用私有目录，卸载应用会一并清除，升级或卸载前请先导出备份。
-- 应用未声明 `INTERNET` 权限，不包含账号、云同步或任何在线服务。
-- 忘记 PIN 无法找回，只能重装后通过备份恢复。
+- The database, images, and backups live in the app's private storage. Uninstalling the app removes them, so export a backup before upgrading or uninstalling.
+- The app declares no `INTERNET` permission and contains no accounts, cloud sync, or online services.
+- A forgotten PIN cannot be recovered; reinstall the app and restore from a backup instead.
