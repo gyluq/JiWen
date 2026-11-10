@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../data/app_settings.dart';
@@ -229,13 +230,23 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   }
 
   void _applyToolbar(_ToolbarTool tool) {
+    // Every toolbar tap answers back on the finger: without it a transform
+    // that only nudges a marker reads as "the button did nothing".
+    HapticFeedback.selectionClick();
     final value = _bodyCtrl.value;
     final edit = switch (tool) {
       _ToolbarTool.heading => cycleHeading(value),
       _ToolbarTool.list => toggleList(value),
+      _ToolbarTool.task => toggleTaskList(value),
+      _ToolbarTool.indent => indentLines(value),
+      _ToolbarTool.outdent => outdentLines(value),
       _ToolbarTool.code => toggleCodeBlock(value),
+      _ToolbarTool.codeSpan => toggleInlineCode(value),
       _ToolbarTool.bold => toggleBold(value),
       _ToolbarTool.italic => toggleItalic(value),
+      _ToolbarTool.strike => toggleStrike(value),
+      _ToolbarTool.table => insertTable(value),
+      _ToolbarTool.divider => insertDivider(value),
       _ToolbarTool.link => insertLink(value),
       _ToolbarTool.image => null,
     };
@@ -244,7 +255,28 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
       return;
     }
     _bodyCtrl.value = edit.value;
+    // Re-read the format state from the text we just produced instead of
+    // trusting the controller listener alone: on device the IME can re-attach
+    // between the assignment and the listener, and a stale state leaves the
+    // toolbar showing the previous line.
+    _format.value = inspectMarkdown(_bodyCtrl.value);
     _bodyFocus.requestFocus();
+  }
+
+  /// Ticking a box in the preview is a real edit: it rewrites the source line
+  /// and saves right away, because the preview is the only handle the user has
+  /// on that row while reading.
+  void _togglePreviewTask(int line) {
+    final next = toggleTaskAtLine(_bodyCtrl.text, line);
+    if (next == null) return;
+    HapticFeedback.selectionClick();
+    _bodyCtrl.value = TextEditingValue(
+      text: next,
+      selection: _bodyCtrl.selection,
+    );
+    _format.value = inspectMarkdown(_bodyCtrl.value);
+    _saveNow();
+    setState(() {});
   }
 
   void _setPreview(bool preview) {
@@ -253,8 +285,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     if (preview) _saveNow();
     setState(() => _preview = preview);
   }
-
-  int get _charCount => _bodyCtrl.text.replaceAll(RegExp(r'\s+'), '').length;
 
   /// Picks a photo, stores it privately and inserts a Markdown reference.
   Future<void> _pickImage() async {
@@ -390,38 +420,50 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
             onPressed: _pop,
           ),
           titleSpacing: 0,
-          title: ValueListenableBuilder<String>(
-            valueListenable: _status,
-            builder: (context, value, _) {
-              return AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: value.isEmpty
-                    ? const SizedBox(width: 1, height: 1)
-                    : Row(
-                        key: ValueKey(value),
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 5,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              color: AppColors.accent,
-                              shape: BoxShape.circle,
-                            ),
+          // A single toggle in the bar instead of a mode row in the toolbar:
+          // it names the mode you are switching *to*.
+          title: Row(
+            children: [
+              _ModeSwitch(
+                preview: _preview,
+                onTap: () => _setPreview(!_preview),
+              ),
+              const Spacer(),
+              ValueListenableBuilder<String>(
+                valueListenable: _status,
+                builder: (context, value, _) {
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: value.isEmpty
+                        ? const SizedBox(width: 1, height: 1)
+                        : Row(
+                            key: ValueKey(value),
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 5,
+                                height: 5,
+                                decoration: BoxDecoration(
+                                  color: AppColors.accent,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                value,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.muted,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            value,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.muted,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                        ],
-                      ),
-              );
-            },
+                  );
+                },
+              ),
+              const SizedBox(width: 4),
+            ],
           ),
           actions: [
             TextButton(
@@ -492,7 +534,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                     ),
                     const SizedBox(height: 14),
                     if (_preview)
-                      MarkdownView(source: _bodyCtrl.text)
+                      MarkdownView(
+                        source: _bodyCtrl.text,
+                        onToggleTask: _togglePreviewTask,
+                      )
                     else
                       // Tapping the blank space under the text still focuses
                       // the body field.
@@ -534,48 +579,47 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     );
   }
 
+  /// A fixed 8×2 grid: two rows of eight, no horizontal scrolling, so every
+  /// tool keeps its place while typing.
   Widget _buildToolbar() {
+    if (_preview) return const SizedBox.shrink();
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.line)),
       ),
-      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (!_preview)
-              ValueListenableBuilder<MarkdownFormatState>(
-                valueListenable: _format,
-                builder: (context, state, _) {
-                  return SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      spacing: 2,
-                      children: [
-                        _ToolButton(
-                          tooltip: '撤销',
-                          active: false,
-                          enabled: _canUndo,
-                          onTap: _undo,
-                          child: const Icon(Icons.undo_rounded, size: 19),
-                        ),
-                        _ToolButton(
-                          tooltip: '重做',
-                          active: false,
-                          enabled: _canRedo,
-                          onTap: _redo,
-                          child: const Icon(Icons.redo_rounded, size: 19),
-                        ),
-                        Container(
-                          width: 1,
-                          height: 22,
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          color: AppColors.line,
-                        ),
-                        _ToolButton(
+        child: ValueListenableBuilder<MarkdownFormatState>(
+          valueListenable: _format,
+          builder: (context, state, _) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  spacing: 2,
+                  children: [
+                    _cell(
+                      _ToolButton(
+                        tooltip: '撤销',
+                        active: false,
+                        enabled: _canUndo,
+                        onTap: _undo,
+                        child: const Icon(Icons.undo_rounded, size: 19),
+                      ),
+                    ),
+                    _cell(
+                      _ToolButton(
+                        tooltip: '重做',
+                        active: false,
+                        enabled: _canRedo,
+                        onTap: _redo,
+                        child: const Icon(Icons.redo_rounded, size: 19),
+                      ),
+                    ),
+                    _cell(
+                      _ToolButton(
                         tooltip: '标题',
                         active: state.headingLevel > 0,
                         onTap: () => _applyToolbar(_ToolbarTool.heading),
@@ -587,21 +631,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                           ),
                         ),
                       ),
-                      _ToolButton(
-                        tooltip: '列表',
-                        active: state.inList,
-                        onTap: () => _applyToolbar(_ToolbarTool.list),
-                        child: const Icon(
-                          Icons.format_list_bulleted_rounded,
-                          size: 19,
-                        ),
-                      ),
-                      _ToolButton(
-                        tooltip: '代码块',
-                        active: state.inCodeBlock,
-                        onTap: () => _applyToolbar(_ToolbarTool.code),
-                        child: const Icon(Icons.code_rounded, size: 19),
-                      ),
+                    ),
+                    _cell(
                       _ToolButton(
                         tooltip: '加粗',
                         active: state.bold,
@@ -614,6 +645,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                           ),
                         ),
                       ),
+                    ),
+                    _cell(
                       _ToolButton(
                         tooltip: '斜体',
                         active: state.italic,
@@ -627,99 +660,131 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                           ),
                         ),
                       ),
+                    ),
+                    _cell(
+                      _ToolButton(
+                        tooltip: '删除线',
+                        active: state.strike,
+                        onTap: () => _applyToolbar(_ToolbarTool.strike),
+                        child: const Text(
+                          'S',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                      ),
+                    ),
+                    _cell(
+                      _ToolButton(
+                        tooltip: '行内代码',
+                        active: state.codeSpan,
+                        onTap: () => _applyToolbar(_ToolbarTool.codeSpan),
+                        child: const Icon(Icons.code_rounded, size: 18),
+                      ),
+                    ),
+                    _cell(
+                      _ToolButton(
+                        tooltip: '列表',
+                        active: state.inList,
+                        onTap: () => _applyToolbar(_ToolbarTool.list),
+                        child: const Icon(
+                          Icons.format_list_bulleted_rounded,
+                          size: 19,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  spacing: 2,
+                  children: [
+                    _cell(
+                      _ToolButton(
+                        tooltip: '任务列表',
+                        active: state.inTask,
+                        onTap: () => _applyToolbar(_ToolbarTool.task),
+                        child: const Icon(Icons.checklist_rounded, size: 19),
+                      ),
+                    ),
+                    _cell(
+                      _ToolButton(
+                        tooltip: '缩进',
+                        active: false,
+                        onTap: () => _applyToolbar(_ToolbarTool.indent),
+                        child: const Icon(
+                          Icons.format_indent_increase_rounded,
+                          size: 19,
+                        ),
+                      ),
+                    ),
+                    _cell(
+                      _ToolButton(
+                        tooltip: '取消缩进',
+                        active: false,
+                        onTap: () => _applyToolbar(_ToolbarTool.outdent),
+                        child: const Icon(
+                          Icons.format_indent_decrease_rounded,
+                          size: 19,
+                        ),
+                      ),
+                    ),
+                    _cell(
+                      _ToolButton(
+                        tooltip: '代码块',
+                        active: state.inCodeBlock,
+                        onTap: () => _applyToolbar(_ToolbarTool.code),
+                        child: const Icon(Icons.data_object_rounded, size: 19),
+                      ),
+                    ),
+                    _cell(
+                      _ToolButton(
+                        tooltip: '表格',
+                        active: false,
+                        onTap: () => _applyToolbar(_ToolbarTool.table),
+                        child: const Icon(Icons.table_chart_outlined, size: 19),
+                      ),
+                    ),
+                    _cell(
+                      _ToolButton(
+                        tooltip: '分隔线',
+                        active: false,
+                        onTap: () => _applyToolbar(_ToolbarTool.divider),
+                        child: const Icon(
+                          Icons.horizontal_rule_rounded,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    _cell(
                       _ToolButton(
                         tooltip: '插入图片',
                         active: false,
                         onTap: () => _applyToolbar(_ToolbarTool.image),
                         child: const Icon(Icons.image_outlined, size: 19),
                       ),
+                    ),
+                    _cell(
                       _ToolButton(
                         tooltip: '插入链接',
                         active: false,
                         onTap: () => _applyToolbar(_ToolbarTool.link),
                         child: const Icon(Icons.link_rounded, size: 19),
                       ),
-                      ],
                     ),
-                  );
-                },
-              ),
-            if (!_preview) const SizedBox(height: 6),
-            Row(
-              children: [
-                _buildModeToggle(),
-                const Spacer(),
-                AnimatedBuilder(
-                  animation: _bodyCtrl,
-                  builder: (context, _) {
-                    return Text(
-                      '字数 $_charCount',
-                      style: TextStyle(fontSize: 11, color: AppColors.muted),
-                    );
-                  },
+                  ],
                 ),
               ],
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildModeToggle() {
-    // A single sliding highlight instead of per-segment ink, so tapping one
-    // segment never flashes the whole capsule.
-    const segmentWidth = 56.0;
-    const segmentHeight = 26.0;
-    return Container(
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        color: AppColors.bg,
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: AppColors.line),
-      ),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: AnimatedAlign(
-              alignment: _preview
-                  ? Alignment.centerRight
-                  : Alignment.centerLeft,
-              duration: const Duration(milliseconds: 160),
-              curve: Curves.easeOut,
-              child: Container(
-                width: segmentWidth,
-                height: segmentHeight,
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(7),
-                ),
-              ),
-            ),
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _ModeButton(
-                label: '编辑',
-                selected: !_preview,
-                width: segmentWidth,
-                height: segmentHeight,
-                onTap: () => _setPreview(false),
-              ),
-              _ModeButton(
-                label: '预览',
-                selected: _preview,
-                width: segmentWidth,
-                height: segmentHeight,
-                onTap: () => _setPreview(true),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _cell(Widget child) => Expanded(child: child);
 
   TextStyle get _titleStyle => TextStyle(
     fontSize: 21,
@@ -737,7 +802,22 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   );
 }
 
-enum _ToolbarTool { heading, list, code, bold, italic, image, link }
+enum _ToolbarTool {
+  heading,
+  list,
+  task,
+  indent,
+  outdent,
+  code,
+  codeSpan,
+  bold,
+  italic,
+  strike,
+  table,
+  divider,
+  image,
+  link,
+}
 
 /// One undo step: title and body captured together (F-16).
 class _EditorSnapshot {
@@ -783,6 +863,14 @@ class _ToolButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: active ? AppColors.accentSoft : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
+            // A tint alone disappears in dark mode, where the soft accent sits
+            // almost on top of the surface colour. The hairline keeps the lit
+            // state readable in both themes.
+            border: Border.all(
+              color: active
+                  ? AppColors.accent.withValues(alpha: 0.55)
+                  : Colors.transparent,
+            ),
           ),
           child: IconTheme.merge(
             data: IconThemeData(color: color),
@@ -797,38 +885,53 @@ class _ToolButton extends StatelessWidget {
   }
 }
 
-class _ModeButton extends StatelessWidget {
-  const _ModeButton({
-    required this.label,
-    required this.selected,
-    required this.width,
-    required this.height,
-    required this.onTap,
-  });
+/// One button that flips between editing and reading.
+///
+/// It is labelled with the mode you get by tapping it, so the label is the
+/// action rather than the current state.
+class _ModeSwitch extends StatelessWidget {
+  const _ModeSwitch({required this.preview, required this.onTap});
 
-  final String label;
-  final bool selected;
-  final double width;
-  final double height;
+  final bool preview;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: SizedBox(
-        width: width,
-        height: height,
-        child: Center(
-          child: AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 160),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected ? AppColors.ink : AppColors.ink2,
+    final foreground = preview ? AppColors.accentInk : AppColors.ink2;
+    return Tooltip(
+      message: preview ? '切换到编辑' : '切换到预览',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(9),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 29,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: preview ? AppColors.accentSoft : AppColors.bg,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(
+              color: preview ? Colors.transparent : AppColors.line,
             ),
-            child: Text(label),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                preview ? Icons.edit_outlined : Icons.visibility_outlined,
+                size: 15,
+                color: foreground,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                preview ? '编辑' : '预览',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: preview ? FontWeight.w600 : FontWeight.w500,
+                  color: foreground,
+                ),
+              ),
+            ],
           ),
         ),
       ),

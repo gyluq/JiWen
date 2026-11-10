@@ -1,9 +1,12 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:path/path.dart' as p;
 
 import '../data/app_lock.dart';
 import '../data/app_settings.dart';
+import '../data/custom_fonts.dart';
 import '../theme.dart';
 import '../util/secure_screen.dart';
 import '../widgets/note_action_sheet.dart';
@@ -76,8 +79,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           _choiceTile(
             title: '字体',
-            value: _settings.fontFamily.label,
-            subtitle: '系统默认，或内置宋体',
+            value: _settings.importedFontId == null
+                ? _settings.fontFamily.label
+                : (CustomFonts.instance.byId(_settings.importedFontId)?.name ??
+                      '自定义字体'),
+            subtitle: '系统默认、内置宋体，或导入 .ttf / .otf',
             onTap: _pickFontFamily,
           ),
           _choiceTile(
@@ -164,9 +170,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.bar_chart_rounded,
             title: '统计',
             subtitle: '笔记总数、待解答与标签分布',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const StatisticsScreen()),
-            ),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const StatisticsScreen())),
           ),
           _actionTile(
             icon: Icons.storage_rounded,
@@ -222,60 +228,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _pickFontFamily() async {
-    final picked = await showModalBottomSheet<AppFontFamily>(
+    await showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.surface,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '字体',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                ),
-              ),
-              for (final family in AppFontFamily.values)
-                ListTile(
-                  title: Text(
-                    '${family.label} · 正文示例',
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.6,
-                      fontFamily: family.family,
-                      color: AppColors.ink2,
-                    ),
-                  ),
-                  trailing: family == _settings.fontFamily
-                      ? Icon(
-                          Icons.check_rounded,
-                          size: 18,
-                          color: AppColors.accent,
-                        )
-                      : null,
-                  onTap: () => Navigator.of(sheetContext).pop(family),
-                ),
-              const SizedBox(height: 6),
-            ],
-          ),
-        );
-      },
+      builder: (_) => const _FontSheet(),
     );
-    if (picked == null || !mounted) return;
-    _settings.setFontFamily(picked);
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   Future<void> _pickFontSize() async {
@@ -767,6 +729,222 @@ class _VerifyPinDialogState extends State<_VerifyPinDialog> {
           child: Text('确认', style: TextStyle(color: AppColors.accentInk)),
         ),
       ],
+    );
+  }
+}
+
+/// Font picker: the built-in families, every imported font, and the import
+/// action that pulls a `.ttf` / `.otf` file from the device.
+class _FontSheet extends StatefulWidget {
+  const _FontSheet();
+
+  @override
+  State<_FontSheet> createState() => _FontSheetState();
+}
+
+class _FontSheetState extends State<_FontSheet> {
+  AppSettings get _settings => AppSettings.instance;
+
+  bool _importing = false;
+  String? _error;
+
+  Future<void> _import() async {
+    if (_importing) return;
+    setState(() {
+      _importing = true;
+      _error = null;
+    });
+    try {
+      final picked = await FilePicker.pickFile(
+        dialogTitle: '选择字体文件',
+        type: FileType.custom,
+        allowedExtensions: CustomFonts.supportedExtensions,
+      );
+      if (picked == null) {
+        if (mounted) setState(() => _importing = false);
+        return;
+      }
+      final path = picked.path;
+      if (path == null) throw const FontImportException('无法读取该文件');
+      final font = await CustomFonts.instance.add(
+        sourcePath: path,
+        displayName: p.basenameWithoutExtension(picked.name),
+      );
+      if (!mounted) return;
+      _settings.setImportedFont(font.id);
+      Navigator.of(context).pop();
+    } on FontImportException catch (error) {
+      if (mounted) {
+        setState(() {
+          _importing = false;
+          _error = error.message;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _importing = false;
+          _error = '导入失败，请换一个字体文件';
+        });
+      }
+    }
+  }
+
+  Future<void> _remove(ImportedFont font) async {
+    await CustomFonts.instance.remove(font);
+    if (_settings.importedFontId == font.id) {
+      _settings.setFontFamily(AppFontFamily.system);
+    }
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fonts = CustomFonts.instance.fonts;
+    final activeImported = _settings.importedFontId;
+    return SafeArea(
+      top: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.72,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '字体',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                  ),
+                ),
+              ),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                children: [
+                  for (final family in AppFontFamily.values)
+                    _buildRow(
+                      label: family.label,
+                      family: family.family,
+                      selected:
+                          activeImported == null &&
+                          _settings.fontFamily == family,
+                      onTap: () {
+                        _settings.setFontFamily(family);
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  for (final font in fonts)
+                    _buildRow(
+                      label: font.name,
+                      family: font.family,
+                      imported: true,
+                      selected: activeImported == font.id,
+                      onTap: () {
+                        _settings.setImportedFont(font.id);
+                        Navigator.of(context).pop();
+                      },
+                      onDelete: () => _remove(font),
+                    ),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 6, 20, 10),
+                      child: Text(
+                        _error!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.5,
+                          color: AppColors.danger,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Container(height: 1, color: AppColors.line),
+            ListTile(
+              leading: Icon(
+                Icons.file_upload_outlined,
+                size: 20,
+                color: AppColors.muted,
+              ),
+              title: Text(
+                _importing ? '正在导入…' : '从文件导入字体',
+                style: TextStyle(fontSize: 14, color: AppColors.ink),
+              ),
+              subtitle: Text(
+                '支持 .ttf / .otf，单个文件',
+                style: TextStyle(fontSize: 11, color: AppColors.muted),
+              ),
+              onTap: _importing ? null : _import,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '导入的字体只保存在本机，卸载应用后需要重新导入。',
+                  style: TextStyle(fontSize: 11, color: AppColors.muted),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRow({
+    required String label,
+    required String? family,
+    required bool selected,
+    required VoidCallback onTap,
+    bool imported = false,
+    VoidCallback? onDelete,
+  }) {
+    return ListTile(
+      title: Text(
+        '$label · 正文示例',
+        style: TextStyle(
+          fontSize: 14,
+          height: 1.6,
+          fontFamily: family,
+          color: AppColors.ink2,
+        ),
+      ),
+      subtitle: imported
+          ? Text(
+              '导入的字体',
+              style: TextStyle(fontSize: 11, color: AppColors.muted),
+            )
+          : null,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (selected)
+            Icon(Icons.check_rounded, size: 18, color: AppColors.accent),
+          if (onDelete != null)
+            IconButton(
+              onPressed: onDelete,
+              tooltip: '删除字体',
+              visualDensity: VisualDensity.compact,
+              icon: Icon(
+                Icons.delete_outline_rounded,
+                size: 18,
+                color: AppColors.muted,
+              ),
+            ),
+        ],
+      ),
+      onTap: onTap,
     );
   }
 }

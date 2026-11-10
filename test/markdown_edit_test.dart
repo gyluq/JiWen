@@ -66,6 +66,30 @@ void main() {
         'https://',
       );
     });
+
+    test('strikethrough wraps and unwraps a selection', () {
+      final wrapped = toggleStrike(_value('abc', 0, 3));
+      expect(wrapped.text, '~~abc~~');
+      expect(wrapped.selection.start, 2);
+
+      final unwrapped = toggleStrike(_value('~~abc~~', 2, 5));
+      expect(unwrapped.text, 'abc');
+    });
+
+    test('inline code wraps a selection in backticks', () {
+      final wrapped = toggleInlineCode(_value('abc', 0, 3));
+      expect(wrapped.text, '`abc`');
+      expect(wrapped.selection.start, 1);
+      expect(wrapped.selection.end, 4);
+
+      final unwrapped = toggleInlineCode(_value('`abc`', 1, 4));
+      expect(unwrapped.text, 'abc');
+    });
+
+    test('inline code inserts a placeholder at the caret', () {
+      final result = toggleInlineCode(_value('x'));
+      expect(result.text, 'x`代码`');
+    });
   });
 
   group('lines', () {
@@ -103,6 +127,62 @@ void main() {
       expect(result.text, '```\n\n```');
       expect(result.selection.start, 4);
     });
+
+    test('task list toggles on and off', () {
+      final added = toggleTaskList(_value('a\nb', 0, 3));
+      expect(added.text, '- [ ] a\n- [ ] b');
+
+      final converted = toggleTaskList(_value('- a'));
+      expect(converted.text, '- [ ] a');
+
+      final removed = toggleTaskList(_value('- [ ] a\n- [x] b', 0, 15));
+      expect(removed.text, 'a\nb');
+    });
+
+    test('task list keeps the line indentation', () {
+      final result = toggleTaskList(_value('  a'));
+      expect(result.text, '  - [ ] a');
+    });
+
+    test('indent and outdent are separate buttons with fixed direction', () {
+      final deeper = indentLines(_value('  a', 0, 3));
+      expect(deeper.text, '    a');
+
+      final shallower = outdentLines(_value('    a', 0, 5));
+      expect(shallower.text, '  a');
+
+      // Already flush left: nothing to strip, no exception.
+      final flush = outdentLines(_value('a', 0, 1));
+      expect(flush.text, 'a');
+
+      // A single leading space goes away in one tap.
+      final single = outdentLines(_value(' a', 0, 2));
+      expect(single.text, 'a');
+
+      // Both directions apply to every selected line.
+      expect(indentLines(_value('a\n  b', 0, 5)).text, '  a\n    b');
+      expect(outdentLines(_value('  a\n    b', 0, 9)).text, 'a\n  b');
+    });
+
+    test('divider starts its own paragraph', () {
+      final result = insertDivider(_value('abc'));
+      expect(result.text, 'abc\n\n---\n');
+      expect(result.selection.start, 'abc\n\n---\n'.length);
+    });
+
+    test('divider lands on a blank line without extra newlines', () {
+      final result = insertDivider(_value('abc\n'));
+      expect(result.text, 'abc\n---\n');
+    });
+
+    test('table template selects the first header cell', () {
+      final result = insertTable(_value(''));
+      expect(result.text, '| 列 1 | 列 2 |\n| --- | --- |\n|  |  |\n');
+      expect(
+        result.text.substring(result.selection.start, result.selection.end),
+        '列 1',
+      );
+    });
   });
 
   group('state', () {
@@ -124,6 +204,29 @@ void main() {
     test('detects code block state', () {
       final state = inspectMarkdown(_value('```\nabc\n```', 5, 5));
       expect(state.inCodeBlock, isTrue);
+    });
+
+    test('a checklist line reports task, not bullet', () {
+      final task = inspectMarkdown(_value('- [ ] 核对', 6, 6));
+      expect(task.inTask, isTrue);
+      expect(task.inList, isFalse);
+
+      final bullet = inspectMarkdown(_value('- 核对', 3, 3));
+      expect(bullet.inTask, isFalse);
+      expect(bullet.inList, isTrue);
+
+      final checked = inspectMarkdown(_value('- [x] 核对', 6, 6));
+      expect(checked.inTask, isTrue);
+    });
+
+    test('detects strikethrough and inline code at the caret', () {
+      final strike = inspectMarkdown(_value('a ~~gone~~ b', 6, 6));
+      expect(strike.strike, isTrue);
+      expect(strike.bold, isFalse);
+
+      final code = inspectMarkdown(_value('a `x` b', 4, 4));
+      expect(code.codeSpan, isTrue);
+      expect(code.strike, isFalse);
     });
   });
 
@@ -165,6 +268,42 @@ void main() {
     test('plain lines are untouched', () {
       final result = enter('text', '');
       expect(result.text, 'text\n');
+    });
+
+    test('continues a checklist item unchecked', () {
+      final result = enter('- [x] done', '');
+      expect(result.text, '- [x] done\n- [ ] ');
+      expect(result.selection.start, result.text.length);
+    });
+
+    test('an empty checklist item exits the list', () {
+      final result = enter('- [ ] ', '');
+      expect(result.text, '\n');
+      expect(result.selection.start, 0);
+    });
+  });
+
+  group('ticking from the reading view', () {
+    test('flips one box and leaves the other lines alone', () {
+      const source = '# 清单\n\n- [ ] 一\n- [x] 二\n';
+      expect(toggleTaskAtLine(source, 2), '# 清单\n\n- [x] 一\n- [x] 二\n');
+      expect(toggleTaskAtLine(source, 3), '# 清单\n\n- [ ] 一\n- [ ] 二\n');
+    });
+
+    test('keeps indentation, the bullet and the text after the box', () {
+      expect(toggleTaskAtLine('  * [ ] 缩进的任务', 0), '  * [x] 缩进的任务');
+      expect(toggleTaskAtLine('* [X] 大写勾', 0), '* [ ] 大写勾');
+    });
+
+    test('returns null when the line is not a checklist row', () {
+      expect(toggleTaskAtLine('- 普通项目', 0), isNull);
+      expect(toggleTaskAtLine('正文 [ ] 不是行首', 0), isNull);
+      expect(toggleTaskAtLine('- [ ] 一', 3), isNull);
+      expect(toggleTaskAtLine('- [ ] 一', -1), isNull);
+    });
+
+    test('survives CRLF line endings', () {
+      expect(toggleTaskAtLine('- [ ] 一\r\n- [ ] 二', 1), '- [ ] 一\r\n- [x] 二');
     });
   });
 }

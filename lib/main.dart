@@ -4,6 +4,7 @@ import 'data/app_lock.dart';
 import 'data/app_settings.dart';
 import 'data/attachments.dart';
 import 'data/backup.dart';
+import 'data/custom_fonts.dart';
 import 'data/notes_db.dart';
 import 'screens/lock_screen.dart';
 import 'screens/note_list_screen.dart';
@@ -15,6 +16,16 @@ Future<void> main() async {
   await NotesDb.instance.init();
   await AttachmentStore.instance.init();
   AppSettings.instance.load();
+  // Imported fonts have to be registered before the first frame, otherwise the
+  // chosen family would fall back to the system font.
+  try {
+    await CustomFonts.instance.init();
+  } catch (_) {
+    // A broken font directory must not block the app.
+  }
+  AppSettings.instance.syncImportedFont(
+    CustomFonts.instance.fonts.map((font) => font.id),
+  );
   // Notes kept in the recycle bin for more than 30 days are dropped on start.
   AttachmentStore.instance.deleteReferences(NotesDb.instance.purgeExpired());
   // F-43: the first launch of a day (or 50 accumulated writes) makes a backup.
@@ -114,11 +125,11 @@ class _JiWenAppState extends State<JiWenApp> with WidgetsBindingObserver {
           debugShowCheckedModeBanner: false,
           theme: buildAppTheme(
             AppPalette.light,
-            fontFamily: AppSettings.instance.fontFamily.family,
+            fontFamily: AppSettings.instance.fontFamilyName,
           ),
           darkTheme: buildAppTheme(
             AppPalette.dark,
-            fontFamily: AppSettings.instance.fontFamily.family,
+            fontFamily: AppSettings.instance.fontFamilyName,
           ),
           themeMode: AppSettings.instance.themeMode.materialMode,
           builder: (context, child) {

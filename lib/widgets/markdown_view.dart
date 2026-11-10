@@ -17,9 +17,13 @@ import '../util/search_highlight.dart';
 /// list out of [MarkdownBlockView] so it can jump to a heading or a search hit
 /// (F-33 / F-57).
 class MarkdownView extends StatelessWidget {
-  const MarkdownView({super.key, required this.source});
+  const MarkdownView({super.key, required this.source, this.onToggleTask});
 
   final String source;
+
+  /// Called with the source line of a tapped checklist row. When null the
+  /// boxes are decoration only.
+  final ValueChanged<int>? onToggleTask;
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +37,8 @@ class MarkdownView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final block in document.blocks) MarkdownBlockView(block: block),
+        for (final block in document.blocks)
+          MarkdownBlockView(block: block, onToggleTask: onToggleTask),
       ],
     );
   }
@@ -49,12 +54,17 @@ class MarkdownBlockView extends StatefulWidget {
     super.key,
     required this.block,
     this.highlight = '',
+    this.onToggleTask,
   });
 
   final MdBlock block;
 
   /// Search keyword painted with the accent (F-28).
   final String highlight;
+
+  /// Called with the source line of a tapped checklist row; null keeps the
+  /// boxes read-only.
+  final ValueChanged<int>? onToggleTask;
 
   @override
   State<MarkdownBlockView> createState() => _MarkdownBlockViewState();
@@ -138,6 +148,21 @@ class _MarkdownBlockViewState extends State<MarkdownBlockView> {
         );
       case MdCodeBlock(:final code, :final language):
         return _buildCodeBlock(context, code, language);
+      case MdTaskListBlock(:final items):
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: items.map(_buildTaskItem).toList(),
+          ),
+        );
+      case MdTableBlock():
+        return _buildTable(context, block, maxWidth);
+      case MdDividerBlock():
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          child: Container(height: 1, color: AppColors.line),
+        );
       case MdQuote(:final children):
         return Container(
           margin: const EdgeInsets.only(top: 4, bottom: 14),
@@ -194,6 +219,141 @@ class _MarkdownBlockViewState extends State<MarkdownBlockView> {
           ),
         ],
       ),
+    );
+  }
+
+  /// A checklist row: a drawn box on the left, the text on the right.
+  ///
+  /// The whole row is the hit area: a 16px box is a hard target on a phone,
+  /// and in a reading view the only thing a tap on a checklist can mean is
+  /// "tick this off".
+  Widget _buildTaskItem(MdTaskItem item) {
+    final checked = item.checked;
+    final style = checked
+        ? _listStyle.copyWith(
+            color: AppColors.muted,
+            decoration: TextDecoration.lineThrough,
+            decorationColor: AppColors.muted,
+          )
+        : _listStyle;
+    final onToggle = widget.onToggleTask;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onToggle == null ? null : () => onToggle(item.line),
+      child: Padding(
+        padding: EdgeInsets.only(left: item.indent == 0 ? 0 : 18, bottom: 7),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 4, right: 9),
+              child: Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: checked ? AppColors.accent : Colors.transparent,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: checked ? AppColors.accent : AppColors.line,
+                    width: 1.2,
+                  ),
+                ),
+                child: checked
+                    ? const Icon(
+                        Icons.check_rounded,
+                        size: 11,
+                        color: Color(0xFFFFF8F1),
+                      )
+                    : null,
+              ),
+            ),
+            Expanded(
+              child: Text.rich(
+                TextSpan(children: _buildSpans(context, item.children, style)),
+                style: style,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A pipe table: fixed-width columns so long cells wrap instead of pushing
+  /// the table off-screen; wide tables scroll sideways.
+  Widget _buildTable(
+    BuildContext context,
+    MdTableBlock block,
+    double maxWidth,
+  ) {
+    final columns = block.columnCount;
+    if (columns == 0) return const SizedBox.shrink();
+    final width = (maxWidth / columns).clamp(72.0, 200.0);
+    final rows = <TableRow>[
+      TableRow(
+        decoration: BoxDecoration(color: AppColors.tagBg),
+        children: [
+          for (var column = 0; column < columns; column++)
+            _buildTableCell(block.header[column], block.aligns[column], true),
+        ],
+      ),
+      for (final row in block.rows)
+        TableRow(
+          children: [
+            for (var column = 0; column < columns; column++)
+              _buildTableCell(
+                column < row.length ? row[column] : const <MdInline>[],
+                block.aligns[column],
+                false,
+              ),
+          ],
+        ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 14),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Table(
+          columnWidths: {
+            for (var column = 0; column < columns; column++)
+              column: FixedColumnWidth(width),
+          },
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+          border: TableBorder.all(
+            color: AppColors.line,
+            width: 0.8,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          children: rows,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTableCell(
+    List<MdInline> cells,
+    MdColumnAlign align,
+    bool header,
+  ) {
+    final base = _listStyle.copyWith(
+      fontSize: _listStyle.fontSize! - 0.5,
+      height: 1.5,
+      color: header ? AppColors.ink : AppColors.ink2,
+    );
+    final style = header ? base.copyWith(fontWeight: FontWeight.w600) : base;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: cells.isEmpty
+          ? Text(' ', style: style)
+          : Text.rich(
+              TextSpan(children: _buildSpans(context, cells, style)),
+              style: style,
+              textAlign: switch (align) {
+                MdColumnAlign.center => TextAlign.center,
+                MdColumnAlign.right => TextAlign.right,
+                MdColumnAlign.left => TextAlign.left,
+              },
+            ),
     );
   }
 
@@ -267,6 +427,16 @@ class _MarkdownBlockViewState extends State<MarkdownBlockView> {
             TextSpan(
               children: _buildSpans(context, children, base),
               style: base.copyWith(fontStyle: FontStyle.italic),
+            ),
+          );
+        case MdStrike(:final children):
+          spans.add(
+            TextSpan(
+              children: _buildSpans(context, children, base),
+              style: base.copyWith(
+                decoration: TextDecoration.lineThrough,
+                decorationColor: AppColors.muted,
+              ),
             ),
           );
         case MdCodeSpan(:final code):
@@ -345,7 +515,9 @@ class _MarkdownBlockViewState extends State<MarkdownBlockView> {
     var cursor = 0;
     for (final match in matches) {
       if (match.start > cursor) {
-        spans.addAll(_highlightSpans(text.substring(cursor, match.start), base));
+        spans.addAll(
+          _highlightSpans(text.substring(cursor, match.start), base),
+        );
       }
       final raw = match.group(0)!;
       final url = raw.replaceFirst(RegExp(r'[.,;:!?，。；：！？]+$'), '');
@@ -427,10 +599,7 @@ class _MarkdownBlockViewState extends State<MarkdownBlockView> {
         children: [
           Icon(Icons.image_outlined, size: 13, color: AppColors.muted),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(fontSize: 12, color: AppColors.muted),
-          ),
+          Text(label, style: TextStyle(fontSize: 12, color: AppColors.muted)),
         ],
       ),
     );

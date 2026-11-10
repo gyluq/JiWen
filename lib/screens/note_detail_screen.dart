@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../data/notes_db.dart';
 import '../models/note.dart';
 import '../models/tag.dart';
 import '../theme.dart';
+import '../util/markdown_edit.dart';
 import '../util/markdown_parser.dart';
 import '../util/search_highlight.dart';
 import '../util/time_text.dart';
@@ -58,6 +60,18 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
   void _reloadDocument() {
     _document = parseMarkdown(_note.body);
     _outline = extractOutline(_document);
+  }
+
+  /// Ticking a box on the reading page edits the note in place: the box is
+  /// part of the text, so there is nothing else it could mean.
+  void _toggleTaskLine(int line) {
+    final next = toggleTaskAtLine(_note.body, line);
+    if (next == null) return;
+    HapticFeedback.selectionClick();
+    _note.body = next;
+    _note.updatedAt = DateTime.now().millisecondsSinceEpoch;
+    NotesDb.instance.upsert(_note);
+    setState(_reloadDocument);
   }
 
   /// Scrolls the first search hit into view (F-28); the title stays at the
@@ -281,9 +295,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
       body: ScrollablePositionedList.builder(
         itemScrollController: _scrollController,
         itemPositionsListener: _positionsListener,
-        itemCount: _document.blocks.isEmpty
-            ? 3
-            : _document.blocks.length + 2,
+        itemCount: _document.blocks.isEmpty ? 3 : _document.blocks.length + 2,
         itemBuilder: (context, index) {
           if (index == 0) return _buildHeader(title);
           if (_document.blocks.isEmpty) {
@@ -296,11 +308,11 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
                 ),
               );
             }
-            return const SizedBox(height: 96);
+            return _buildFoot();
           }
           final blockIndex = index - 1;
           if (blockIndex >= _document.blocks.length) {
-            return const SizedBox(height: 96);
+            return _buildFoot();
           }
           // Blocks are built lazily so very long notes scroll smoothly
           // (F-33); the list still knows every index, which is what the
@@ -310,6 +322,7 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
             child: MarkdownBlockView(
               block: _document.blocks[blockIndex],
               highlight: widget.query,
+              onToggleTask: _toggleTaskLine,
             ),
           );
         },
@@ -325,6 +338,27 @@ class _NoteDetailScreenState extends State<NoteDetailScreen> {
       ),
     );
   }
+
+  /// Character count, parked at the very end of the note: it is a property of
+  /// the whole document, so it belongs after the text, not in the toolbar.
+  Widget _buildFoot() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 96),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Text(
+          '字数 $_charCount',
+          style: TextStyle(
+            fontSize: 11,
+            color: AppColors.muted,
+            letterSpacing: 0.1,
+          ),
+        ),
+      ),
+    );
+  }
+
+  int get _charCount => _note.body.replaceAll(RegExp(r'\s+'), '').length;
 
   Widget _buildHeader(String title) {
     return Padding(
@@ -455,9 +489,7 @@ class _OutlineSheet extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
               decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: AppColors.line),
-                ),
+                border: Border(bottom: BorderSide(color: AppColors.line)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

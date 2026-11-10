@@ -202,6 +202,14 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:3px;pad
 
 /* ---------- Editor ---------- */
 .saved{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-right:4px}
+.modebtn{
+  display:inline-flex;align-items:center;gap:5px;height:29px;padding:0 10px;
+  border:1px solid var(--line);border-radius:9px;background:var(--bg);
+  color:var(--ink-2);font-size:12px;font-family:inherit;cursor:pointer;margin-left:2px;
+}
+.modebtn:hover{color:var(--ink)}
+.modebtn svg.ic{width:15px;height:15px}
+.modebtn[data-mode="preview"]{background:var(--accent-soft);border-color:transparent;color:var(--accent-ink);font-weight:600}
 .ink-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:inkfade 3.2s ease-in-out infinite}
 @keyframes inkfade{0%,70%{opacity:1;transform:scale(1)}85%{opacity:.35;transform:scale(.7)}100%{opacity:1;transform:scale(1)}}
 .link-btn{background:none;border:0;color:var(--accent);font-size:14px;font-weight:600;font-family:inherit;padding:8px 10px;cursor:pointer}
@@ -212,24 +220,55 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:3px;pad
   margin-top:14px;letter-spacing:.01em;
 }
 .ed-body .mk{color:var(--accent-ink);font-weight:600}
-.toolbar{flex:0 0 auto;border-top:1px solid var(--line);background:var(--surface);padding:8px 10px 20px}
-.tools{display:flex;align-items:center;gap:2px}
+.toolbar{flex:0 0 auto;border-top:1px solid var(--line);background:var(--surface);padding:8px 8px 16px}
+.toolgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:3px 2px}
 .tool{
-  width:38px;height:36px;border-radius:10px;border:0;background:none;color:var(--ink-2);
-  display:grid;place-items:center;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;
+  height:35px;border-radius:9px;border:0;background:none;color:var(--ink-2);padding:0;
+  display:grid;place-items:center;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;
 }
 .tool.on{background:var(--accent-soft);color:var(--accent-ink)}
-.tool.dim{opacity:.32}
-.tool svg.ic{width:19px;height:19px}
-.tool-div{width:1px;height:22px;background:var(--line);margin:0 4px;flex:0 0 auto}
-.toolbar-foot{display:flex;align-items:center;gap:10px;margin-top:6px;padding:0 4px}
-.mini-seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:2px}
-.mini-seg button{
-  border:0;background:none;font-size:12px;color:var(--ink-2);padding:5px 12px;border-radius:7px;
-  font-family:inherit;cursor:pointer;
+.tool.off{opacity:.32}
+.tool svg.ic{width:18px;height:18px}
+.doc-foot{
+  margin-top:18px;font-size:11px;color:var(--muted);text-align:right;
+  font-variant-numeric:tabular-nums;letter-spacing:.01em;
 }
-.mini-seg button.on{background:var(--surface);color:var(--ink);font-weight:600}
 .count{margin-left:auto;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* ---------- Extended Markdown (tables / tasks / rules) ---------- */
+.mdtable{border-collapse:collapse;width:100%;margin:8px 0 4px;font-size:13px}
+.mdtable th,.mdtable td{
+  border:1px solid var(--line);padding:7px 9px;text-align:left;line-height:1.5;
+}
+.mdtable th{background:var(--tag-bg);color:var(--ink);font-weight:600;font-size:12.5px}
+.mdtable td{color:var(--ink-2)}
+.mdtable .num{text-align:right;font-variant-numeric:tabular-nums}
+.task{display:flex;gap:9px;align-items:flex-start;padding:5px 0;font-size:14px;line-height:1.7;color:var(--ink-2)}
+.task .box{
+  width:16px;height:16px;border-radius:4px;border:1.2px solid var(--line);
+  flex:0 0 auto;margin-top:4px;display:grid;place-items:center;
+  font-size:11px;line-height:1;color:#FFF8F1;
+}
+.task .box.on{background:var(--accent);border-color:var(--accent)}
+.task .done{color:var(--muted);text-decoration:line-through}
+.md code{
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;
+  background:var(--tag-bg);color:var(--ink);padding:1px 5px;border-radius:4px;
+}
+.md del{color:var(--muted)}
+.md hr{border:0;border-top:1px solid var(--line);margin:18px 0}
+
+/* ---------- Font sheet ---------- */
+.flist{max-height:210px;overflow-y:auto}
+.flist::-webkit-scrollbar{width:0}
+.frow{display:flex;align-items:center;gap:10px;padding:12px 20px;border-top:1px solid var(--line)}
+.frow:first-child{border-top:0}
+.frow .fname{font-size:14px;line-height:1.6;color:var(--ink-2)}
+.frow .ftag{font-size:10px;padding:2px 6px;border-radius:999px;background:var(--tag-bg);color:var(--muted)}
+.frow .fcheck{margin-left:auto;color:var(--accent)}
+.frow .fdel{color:var(--muted)}
+.frow .fdel svg{width:16px;height:16px}
+.fhint{padding:10px 20px 0;font-size:11px;color:var(--muted)}
 
 /* ---------- Drawer ---------- */
 .behind{position:absolute;inset:0;padding:96px 20px 0;overflow:hidden}
@@ -388,6 +427,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:3px;pad
   <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.6 2.6 2.6 13.4 0 16M12 4c-2.6 2.6-2.6 13.4 0 16"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4.5 19.5l1-4L16 5l3 3L8.5 18.5l-4 1z"/><path d="M14 7l3 3"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6.2 5.6 12 5.6 21.5 12 21.5 12 17.8 18.4 12 18.4 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.9"/></symbol>
   <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 6L4.5 10.5 9 15"/><path d="M4.5 10.5H14a5.5 5.5 0 0 1 0 11H9"/></symbol>
   <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15 6l4.5 4.5L15 15"/><path d="M19.5 10.5H10a5.5 5.5 0 0 0 0 11h5"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13"/></symbol>
@@ -408,11 +448,17 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:3px;pad
   <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V5M8 9l4-4 4 4"/><path d="M5 19h14"/></symbol>
   <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 8h16M4 16h16"/><circle cx="9" cy="8" r="2.3"/><circle cx="15" cy="16" r="2.3"/></symbol>
   <symbol id="i-folder" viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9H4z"/></symbol>
+  <symbol id="i-task" viewBox="0 0 24 24"><rect x="3" y="7" width="7" height="7" rx="1.8"/><path d="M4.6 10.4l1.6 1.6 3-3.4"/><path d="M13.5 8.5h7M13.5 13h5.5"/></symbol>
+  <symbol id="i-indent" viewBox="0 0 24 24"><path d="M10 6h10M10 12h10M10 18h10M4 9.5L7 12l-3 2.5"/></symbol>
+  <symbol id="i-outdent" viewBox="0 0 24 24"><path d="M10 6h10M10 12h10M10 18h10M7 9.5L4 12l3 2.5"/></symbol>
+  <symbol id="i-table" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M10 10v9"/></symbol>
+  <symbol id="i-hr" viewBox="0 0 24 24"><path d="M3 12h18M6 7h.01M12 7h.01M18 7h.01M6 17h.01M12 17h.01M18 17h.01"/></symbol>
+  <symbol id="i-block" viewBox="0 0 24 24"><path d="M10 4.5C8 4.5 8 6 8 7.5v2C8 11 7 12 5.5 12 7 12 8 13 8 14.5v2c0 1.5 0 3 2 3"/><path d="M14 4.5c2 0 2 1.5 2 3v2c0 1.5 1 2.5 2.5 2.5C17 12 16 13 16 14.5v2c0 1.5 0 3-2 3"/></symbol>
 </svg>
 
 <div class="page-head">
-  <h1>记问 · UI 原型 v1</h1>
-  <div class="sub">14 屏 · 暖白纸感 / 单一朱砂强调 · 360×800 基准 · 固定中文文案</div>
+  <h1>记问 · UI 原型 v2</h1>
+  <div class="sub">16 屏 · 暖白纸感 / 单一朱砂强调 · 360×800 基准 · 固定中文文案</div>
 </div>
 
 <div class="switchbar">
@@ -422,11 +468,13 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:3px;pad
   <button class="chip" data-go="detail">04 笔记详情</button>
   <button class="chip" data-go="outline">04b 大纲</button>
   <button class="chip" data-go="editor">05 笔记编辑</button>
+  <button class="chip" data-go="syntax">05b 扩展语法</button>
   <button class="chip" data-go="dark">06 深色列表</button>
   <button class="chip" data-go="drawer">07 抽屉</button>
   <button class="chip" data-go="sheet">08 长按面板</button>
   <button class="chip" data-go="tags">09 标签管理</button>
   <button class="chip" data-go="settings">10 设置</button>
+  <button class="chip" data-go="font">10b 字体</button>
   <button class="chip" data-go="lock">11 应用锁</button>
   <button class="chip" data-go="trash">12 回收站</button>
   <button class="chip" data-go="stats">13 统计</button>
@@ -615,6 +663,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:3px;pad
         <h2>与其他窑口的关系</h2>
         <p>汝窑、官窑、哥窑与龙泉窑共享铁还原的技术路径，但胎釉配方与烧成曲线不同，呈色因此分层。</p>
       </div>
+      <div class="doc-foot">字数 486</div>
     </div>
     <button class="fab" data-go="editor" aria-label="编辑笔记"><svg class="ic"><use href="#i-pen"/></svg></button>
   </section>
@@ -655,6 +704,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:3px;pad
     </div>
     <div class="appbar">
       <button class="icbtn" data-go="detail" aria-label="返回"><svg class="ic"><use href="#i-back"/></svg></button>
+      <button class="modebtn" data-mode="edit" aria-label="切换编辑与预览" title="切换编辑与预览"><svg class="ic"><use href="#i-eye"/></svg><span>预览</span></button>
       <span class="spacer"></span>
       <span class="saved"><span class="ink-dot"></span>已保存</span>
       <button class="link-btn">完成</button>
@@ -686,21 +736,59 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:3px;pad
 还原焰与氧化焰的切换时点如何影响最终色差，还需要对照几组窑址样本。</div>
     </div>
     <div class="toolbar">
-      <div class="tools">
+      <div class="toolgrid">
         <button class="tool" aria-label="撤销"><svg class="ic"><use href="#i-undo"/></svg></button>
-        <button class="tool dim" aria-label="重做"><svg class="ic"><use href="#i-redo"/></svg></button>
-        <span class="tool-div"></span>
+        <button class="tool off" aria-label="重做"><svg class="ic"><use href="#i-redo"/></svg></button>
         <button class="tool" aria-label="标题">T</button>
-        <button class="tool" aria-label="列表"><svg class="ic"><use href="#i-list"/></svg></button>
-        <button class="tool" aria-label="代码块"><svg class="ic"><use href="#i-code"/></svg></button>
         <button class="tool on" aria-label="加粗">B</button>
         <button class="tool" aria-label="斜体" style="font-style:italic">I</button>
+        <button class="tool" aria-label="删除线"><span style="text-decoration:line-through">S</span></button>
+        <button class="tool" aria-label="行内代码"><svg class="ic"><use href="#i-code"/></svg></button>
+        <button class="tool" aria-label="列表"><svg class="ic"><use href="#i-list"/></svg></button>
+
+        <button class="tool" aria-label="任务列表"><svg class="ic"><use href="#i-task"/></svg></button>
+        <button class="tool" aria-label="缩进"><svg class="ic"><use href="#i-indent"/></svg></button>
+        <button class="tool" aria-label="取消缩进"><svg class="ic"><use href="#i-outdent"/></svg></button>
+        <button class="tool" aria-label="代码块"><svg class="ic"><use href="#i-block"/></svg></button>
+        <button class="tool" aria-label="表格"><svg class="ic"><use href="#i-table"/></svg></button>
+        <button class="tool" aria-label="分隔线"><svg class="ic"><use href="#i-hr"/></svg></button>
         <button class="tool" aria-label="插入图片"><svg class="ic"><use href="#i-image"/></svg></button>
         <button class="tool" aria-label="插入链接"><svg class="ic"><use href="#i-link"/></svg></button>
       </div>
-      <div class="toolbar-foot">
-        <div class="mini-seg"><button class="on">编辑</button><button>预览</button></div>
-        <span class="count">字数 186</span>
+    </div>
+  </section>
+
+  <!-- ========== 05b Extended syntax preview ========== -->
+  <section id="syntax" class="screen">
+    <div class="status">
+      <span>14:32</span>
+      <span class="sys"><span class="sig"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span class="batt"></span></span>
+    </div>
+    <div class="appbar">
+      <button class="icbtn" data-go="editor" aria-label="返回"><svg class="ic"><use href="#i-back"/></svg></button>
+      <div style="font-size:16px;font-weight:650">预览 · 扩展语法</div>
+      <span class="spacer"></span>
+      <button class="icbtn" data-go="editor" aria-label="编辑"><svg class="ic"><use href="#i-pen"/></svg></button>
+    </div>
+    <div class="scroll">
+      <h1 class="detail-title">新补全的五种语法</h1>
+      <div class="meta-line">表格 · 任务列表 · 删除线 · 分隔线 · 行内代码</div>
+      <div class="md">
+        <h2>表格</h2>
+        <table class="mdtable">
+          <tr><th>窑口</th><th>釉色</th><th class="num">釉层厚度</th></tr>
+          <tr><td>汝窑</td><td>天青</td><td class="num">0.2–0.8 mm</td></tr>
+          <tr><td>龙泉</td><td>梅子青</td><td class="num">1.2 mm</td></tr>
+        </table>
+        <div class="stat-foot">列宽平分，长内容自动换行；超出屏宽时整表可横向滑动。</div>
+        <h2>任务列表</h2>
+        <div class="task"><span class="box on">✓</span><span class="done">核对汝窑釉层厚度的三组检测数据</span></div>
+        <div class="task"><span class="box on">✓</span><span class="done">整理还原焰与氧化焰的对照结论</span></div>
+        <div class="task"><span class="box"></span><span>补一组耀州窑样本作横向比较</span></div>
+        <h2>行内样式</h2>
+        <p>行内代码写成 <code>Fe₂O₃ → FeO</code>；<del>已废弃的推测</del>用删除线留痕，回看时才知道哪一句被推翻过。</p>
+        <hr>
+        <p>上面是分隔线：长笔记里不写标题也能断开上下文。</p>
       </div>
     </div>
   </section>
@@ -1049,6 +1137,65 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:3px;pad
       <div class="stat-foot">统计只包含未删除的笔记，标签按关联笔记数排序。</div>
     </div>
   </section>
+  <!-- ========== 10b Font sheet ========== -->
+  <section id="font" class="screen">
+    <div class="status">
+      <span>14:32</span>
+      <span class="sys"><span class="sig"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span class="batt"></span></span>
+    </div>
+    <div class="behind">
+      <div class="group-h">外观</div>
+      <div class="row">
+        <span class="label">深色模式</span>
+        <button class="sw" aria-label="深色模式"></button>
+      </div>
+      <div class="row">
+        <span class="label">字体</span>
+        <span class="val">霞鹜文楷<svg class="ic" style="width:14px;height:14px"><use href="#i-chev"/></svg></span>
+      </div>
+      <div class="row">
+        <span class="label">正文字号</span>
+        <div class="chipset"><button>小</button><button class="on">中</button><button>大</button></div>
+      </div>
+      <div class="row">
+        <span class="label">列表密度</span>
+        <div class="chipset"><button class="on">紧凑</button><button>标准</button><button>宽松</button></div>
+      </div>
+    </div>
+    <div class="dim" data-go="settings"></div>
+    <div class="sheet">
+      <div class="handle"></div>
+      <div class="sheet-h">
+        <div class="sheet-t">字体</div>
+        <div class="sheet-s">系统默认、内置宋体，或导入 .ttf / .otf</div>
+      </div>
+      <div class="flist">
+        <div class="frow">
+          <span class="fname">系统默认 · 正文示例</span>
+          <span class="fcheck"><svg class="ic sm"><use href="#i-check"/></svg></span>
+        </div>
+        <div class="frow">
+          <span class="fname" style="font-family:'Songti SC','SimSun',serif">宋体 · 正文示例</span>
+        </div>
+        <div class="frow">
+          <span class="fname" style="font-family:'Kaiti SC','KaiTi',serif">霞鹜文楷 · 正文示例</span>
+          <span class="ftag">导入</span>
+          <span class="fcheck"><svg class="ic sm"><use href="#i-check"/></svg></span>
+          <span class="fdel"><svg class="ic"><use href="#i-trash"/></svg></span>
+        </div>
+        <div class="frow">
+          <span class="fname">思源黑体 · 正文示例</span>
+          <span class="ftag">导入</span>
+          <span class="fdel"><svg class="ic"><use href="#i-trash"/></svg></span>
+        </div>
+      </div>
+      <button class="sitem">
+        <svg class="ic"><use href="#i-upload"/></svg>从文件导入字体
+        <span style="margin-left:auto;font-size:11px;color:var(--muted)">.ttf / .otf</span>
+      </button>
+      <div class="fhint">导入的字体只保存在本机，卸载应用后需要重新导入。</div>
+    </div>
+  </section>
 
 </div>
 
@@ -1091,6 +1238,20 @@ document.addEventListener('click', e => {
 document.querySelectorAll('.sw').forEach(sw =>
   sw.addEventListener('click', () => sw.classList.toggle('on'))
 );
+
+// Editor: single edit/preview toggle in the app bar
+document.querySelectorAll('.modebtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const toPreview = btn.dataset.mode === 'edit';
+    btn.dataset.mode = toPreview ? 'preview' : 'edit';
+    btn.querySelector('use').setAttribute('href', toPreview ? '#i-pen' : '#i-eye');
+    btn.querySelector('span').textContent = toPreview ? '编辑' : '预览';
+    btn.setAttribute('aria-label', toPreview ? '切换到编辑' : '切换到预览');
+    // the tool grid only exists while editing
+    const bar = btn.closest('.screen').querySelector('.toolbar');
+    if (bar) bar.style.display = toPreview ? 'none' : '';
+  });
+});
 
 // PIN keypad
 let pin = '';

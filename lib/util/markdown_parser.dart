@@ -1,8 +1,9 @@
 /// Minimal Markdown subset used by the note detail view.
 ///
 /// The supported syntax mirrors the editor toolbar (decisions D-1 / D-2):
-/// H1-H3 headings, bullet and ordered lists, fenced code blocks, quotes,
-/// bold, italic, inline code, links and image references. No underline.
+/// H1-H3 headings, bullet / ordered / task lists, fenced code blocks, quotes,
+/// tables, dividers, bold, strikethrough, inline code, links and image
+/// references. Emphasis is asterisk-only: `_underline_` stays literal text.
 sealed class MdBlock {
   const MdBlock();
 }
@@ -35,6 +36,32 @@ class MdListItem {
   final int? number;
 }
 
+/// `- [ ]` / `- [x]` checklist block.
+class MdTaskListBlock extends MdBlock {
+  const MdTaskListBlock(this.items);
+
+  final List<MdTaskItem> items;
+}
+
+class MdTaskItem {
+  const MdTaskItem({
+    required this.children,
+    required this.checked,
+    this.indent = 0,
+    this.line = -1,
+  });
+
+  final List<MdInline> children;
+  final bool checked;
+  final int indent;
+
+  /// Zero-based index of the source line this row came from.
+  ///
+  /// Ticking a box in the reading view has to be written back to the text that
+  /// produced it, and this is the only stable handle on that line.
+  final int line;
+}
+
 class MdCodeBlock extends MdBlock {
   const MdCodeBlock({required this.code, this.language});
 
@@ -46,6 +73,29 @@ class MdQuote extends MdBlock {
   const MdQuote(this.children);
 
   final List<MdInline> children;
+}
+
+/// Pipe table with an optional per-column alignment taken from the delimiter
+/// row (`:---`, `:---:`, `---:`).
+class MdTableBlock extends MdBlock {
+  const MdTableBlock({
+    required this.header,
+    required this.rows,
+    required this.aligns,
+  });
+
+  final List<List<MdInline>> header;
+  final List<List<List<MdInline>>> rows;
+  final List<MdColumnAlign> aligns;
+
+  int get columnCount => header.length;
+}
+
+enum MdColumnAlign { left, center, right }
+
+/// `---` / `***` / `___` horizontal rule.
+class MdDividerBlock extends MdBlock {
+  const MdDividerBlock();
 }
 
 sealed class MdInline {
@@ -66,6 +116,12 @@ class MdStrong extends MdInline {
 
 class MdEmphasis extends MdInline {
   const MdEmphasis(this.children);
+
+  final List<MdInline> children;
+}
+
+class MdStrike extends MdInline {
+  const MdStrike(this.children);
 
   final List<MdInline> children;
 }
@@ -102,6 +158,10 @@ final RegExp _headingPattern = RegExp(r'^(#{1,6})\s+(.*)$');
 final RegExp _fencePattern = RegExp(r'^\s*```(.*)$');
 final RegExp _quotePattern = RegExp(r'^\s*>\s?(.*)$');
 final RegExp _listPattern = RegExp(r'^(\s*)([-*+]|\d+[.)])\s+(.*)$');
+final RegExp _taskPattern = RegExp(r'^(\s*)[-*+]\s+\[([ xX])\]\s*(.*)$');
+final RegExp _dividerPattern = RegExp(
+  r'^\s{0,3}(?:-\s*-\s*-[-\s]*|\*\s*\*\s*\*[*\s]*|_\s*_\s*_[_\s]*)$',
+);
 
 /// A line holding nothing but an image reference, e.g. `![](attachments/a.jpg)`.
 ///
@@ -145,6 +205,12 @@ MdDocument parseMarkdown(String source) {
       continue;
     }
 
+    if (_dividerPattern.hasMatch(line)) {
+      blocks.add(const MdDividerBlock());
+      index++;
+      continue;
+    }
+
     final heading = _headingPattern.firstMatch(line);
     if (heading != null) {
       final rawLevel = heading.group(1)!.length;
@@ -170,6 +236,27 @@ MdDocument parseMarkdown(String source) {
       continue;
     }
 
+    final taskMatch = _taskPattern.firstMatch(line);
+    if (taskMatch != null) {
+      final items = <MdTaskItem>[];
+      while (index < lines.length) {
+        final match = _taskPattern.firstMatch(lines[index]);
+        if (match == null) break;
+        final checked = match.group(2)!.toLowerCase() == 'x';
+        items.add(
+          MdTaskItem(
+            children: _parseInline(match.group(3)!.trim()),
+            checked: checked,
+            indent: match.group(1)!.length >= 2 ? 1 : 0,
+            line: index,
+          ),
+        );
+        index++;
+      }
+      blocks.add(MdTaskListBlock(items));
+      continue;
+    }
+
     final listMatch = _listPattern.firstMatch(line);
     if (listMatch != null) {
       final ordered = !RegExp(r'^[-*+]$').hasMatch(listMatch.group(2)!);
@@ -177,6 +264,8 @@ MdDocument parseMarkdown(String source) {
       while (index < lines.length) {
         final match = _listPattern.firstMatch(lines[index]);
         if (match == null) break;
+        // A task item opens its own block instead of joining the bullet list.
+        if (_taskPattern.hasMatch(lines[index])) break;
         final marker = match.group(2)!;
         final isOrdered = !RegExp(r'^[-*+]$').hasMatch(marker);
         if (isOrdered != ordered) break;
@@ -196,6 +285,11 @@ MdDocument parseMarkdown(String source) {
       continue;
     }
 
+    if (_isTableStart(lines, index)) {
+      index = _parseTable(lines, index, blocks);
+      continue;
+    }
+
     if (_imageLinePattern.hasMatch(line.trim())) {
       blocks.add(MdParagraph(_parseInline(line.trim())));
       index++;
@@ -205,7 +299,7 @@ MdDocument parseMarkdown(String source) {
     final paragraph = <String>[];
     while (index < lines.length) {
       final current = lines[index];
-      if (current.trim().isEmpty || _startsBlock(current)) break;
+      if (current.trim().isEmpty || _startsBlock(lines, index)) break;
       paragraph.add(current.trim());
       index++;
     }
@@ -257,6 +351,8 @@ String inlinePlainText(List<MdInline> inline) {
         buffer.write(inlinePlainText(children));
       case MdEmphasis(:final children):
         buffer.write(inlinePlainText(children));
+      case MdStrike(:final children):
+        buffer.write(inlinePlainText(children));
       case MdCodeSpan(:final code):
         buffer.write(code);
       case MdLink(:final label):
@@ -273,11 +369,17 @@ String blockPlainText(MdBlock block) {
   return switch (block) {
     MdHeading(:final children) => inlinePlainText(children),
     MdParagraph(:final children) => inlinePlainText(children),
-    MdListBlock(:final items) => items
-        .map((item) => inlinePlainText(item.children))
-        .join('\n'),
+    MdListBlock(:final items) =>
+      items.map((item) => inlinePlainText(item.children)).join('\n'),
+    MdTaskListBlock(:final items) =>
+      items.map((item) => inlinePlainText(item.children)).join('\n'),
     MdCodeBlock(:final code) => code,
     MdQuote(:final children) => inlinePlainText(children),
+    MdTableBlock(:final header, :final rows) => [
+      header,
+      ...rows,
+    ].map((cells) => cells.map(inlinePlainText).join(' ')).join('\n'),
+    MdDividerBlock() => '',
   };
 }
 
@@ -293,13 +395,114 @@ int? firstMatchBlock(MdDocument document, String keyword) {
   return null;
 }
 
-bool _startsBlock(String line) {
+bool _startsBlock(List<String> lines, int index) {
+  final line = lines[index];
   return _fencePattern.hasMatch(line) ||
       _headingPattern.hasMatch(line) ||
       _quotePattern.hasMatch(line) ||
+      _taskPattern.hasMatch(line) ||
       _listPattern.hasMatch(line) ||
-      _imageLinePattern.hasMatch(line.trim());
+      _dividerPattern.hasMatch(line) ||
+      _imageLinePattern.hasMatch(line.trim()) ||
+      _isTableStart(lines, index);
 }
+
+// ---------------------------------------------------------------------------
+// Tables
+
+/// Splits a pipe row into trimmed cells, honouring `\|` escapes.
+List<String>? _tableRow(String line) {
+  if (!line.contains('|')) return null;
+  var text = line.trim();
+  if (text.startsWith('|')) text = text.substring(1);
+  if (text.endsWith('|') && !text.endsWith(r'\|')) {
+    text = text.substring(0, text.length - 1);
+  }
+  final cells = <String>[];
+  final buffer = StringBuffer();
+  for (var i = 0; i < text.length; i++) {
+    final char = text[i];
+    if (char == r'\' && i + 1 < text.length && text[i + 1] == '|') {
+      buffer.write('|');
+      i++;
+      continue;
+    }
+    if (char == '|') {
+      cells.add(buffer.toString().trim());
+      buffer.clear();
+      continue;
+    }
+    buffer.write(char);
+  }
+  cells.add(buffer.toString().trim());
+  return cells;
+}
+
+final RegExp _delimiterCell = RegExp(r'^:?-+:?$');
+
+bool _isTableDelimiter(String line) {
+  final cells = _tableRow(line);
+  if (cells == null || cells.isEmpty) return false;
+  return cells.every((cell) => _delimiterCell.hasMatch(cell));
+}
+
+bool _isTableStart(List<String> lines, int index) {
+  if (index + 1 >= lines.length) return false;
+  if (_tableRow(lines[index]) == null) return false;
+  if (_headingPattern.hasMatch(lines[index])) return false;
+  if (_quotePattern.hasMatch(lines[index])) return false;
+  return _isTableDelimiter(lines[index + 1]);
+}
+
+MdColumnAlign _alignOf(String cell) {
+  final left = cell.startsWith(':');
+  final right = cell.endsWith(':');
+  if (left && right) return MdColumnAlign.center;
+  if (right) return MdColumnAlign.right;
+  return MdColumnAlign.left;
+}
+
+/// Consumes a table starting at [index] and returns the next line index.
+int _parseTable(List<String> lines, int index, List<MdBlock> blocks) {
+  final head = _tableRow(lines[index])!;
+  final columns = head.length;
+  final aligns = _tableRow(lines[index + 1])!
+      .map(_alignOf)
+      .toList(growable: false);
+  index += 2;
+
+  final rows = <List<List<MdInline>>>[];
+  while (index < lines.length) {
+    final line = lines[index];
+    if (line.trim().isEmpty) break;
+    final cells = _tableRow(line);
+    if (cells == null) break;
+    if (_isTableDelimiter(line)) break;
+    rows.add(
+      List.generate(
+        columns,
+        (column) => _parseInline(column < cells.length ? cells[column] : ''),
+      ),
+    );
+    index++;
+  }
+
+  blocks.add(
+    MdTableBlock(
+      header: List.generate(columns, (column) => _parseInline(head[column])),
+      rows: rows,
+      aligns: List.generate(
+        columns,
+        (column) =>
+            column < aligns.length ? aligns[column] : MdColumnAlign.left,
+      ),
+    ),
+  );
+  return index;
+}
+
+// ---------------------------------------------------------------------------
+// Inline
 
 List<MdInline> _parseInline(String text) {
   final spans = <MdInline>[];
@@ -349,6 +552,16 @@ List<MdInline> _parseInline(String text) {
           MdLink(label: _parseInline(match.group(1)!), url: match.group(2)!),
         );
         index = match.end;
+        continue;
+      }
+    }
+
+    if (text.startsWith('~~', index)) {
+      final end = text.indexOf('~~', index + 2);
+      if (end != -1 && end > index + 2) {
+        flush();
+        spans.add(MdStrike(_parseInline(text.substring(index + 2, end))));
+        index = end + 2;
         continue;
       }
     }

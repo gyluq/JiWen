@@ -22,25 +22,59 @@ class MarkdownFormatState {
     this.inCodeBlock = false,
     this.bold = false,
     this.italic = false,
+    this.strike = false,
+    this.codeSpan = false,
+    this.inTask = false,
   });
 
   final int headingLevel;
   final bool inList;
+  final bool inTask;
   final bool inCodeBlock;
   final bool bold;
   final bool italic;
+  final bool strike;
+  final bool codeSpan;
 }
 
 final RegExp _headingPrefix = RegExp(r'^(#{1,6})\s+');
 final RegExp _listMarker = RegExp(r'^(\s*)([-*+]|\d+[.)])\s+');
 final RegExp _orderedItem = RegExp(r'^(\s*)(\d+)([.)])\s+(.*)$');
 final RegExp _bulletItem = RegExp(r'^(\s*)([-*+])\s+(.*)$');
+final RegExp _taskItem = RegExp(r'^(\s*)[-*+]\s+\[[ xX]\]\s+');
+final RegExp _taskBox = RegExp(r'^(\s*[-*+][ \t]+)\[([ xX])\]');
+
+/// Flips the checkbox on [line] of [source], leaving everything else alone.
+///
+/// Used by the reading view: a box that cannot be ticked is a picture of a
+/// checkbox, not a checkbox. Returns null when the line is not a checklist row
+/// so the caller can ignore a stale index.
+String? toggleTaskAtLine(String source, int line) {
+  final lines = source.split('\n');
+  if (line < 0 || line >= lines.length) return null;
+  final match = _taskBox.firstMatch(lines[line]);
+  if (match == null) return null;
+  final boxStart = match.start + match.group(1)!.length + 1;
+  final box = match.group(2)!;
+  lines[line] = lines[line].replaceRange(
+    boxStart,
+    boxStart + 1,
+    box == ' ' ? 'x' : ' ',
+  );
+  return lines.join('\n');
+}
 
 MarkdownEdit toggleBold(TextEditingValue value) =>
     _toggleInline(value, '**', '粗体');
 
 MarkdownEdit toggleItalic(TextEditingValue value) =>
     _toggleInline(value, '*', '斜体');
+
+MarkdownEdit toggleStrike(TextEditingValue value) =>
+    _toggleInline(value, '~~', '删除线');
+
+MarkdownEdit toggleInlineCode(TextEditingValue value) =>
+    _toggleInline(value, '`', '代码');
 
 /// Cycles the current line(s) through H1, H2, H3 and no heading.
 MarkdownEdit cycleHeading(TextEditingValue value) {
@@ -61,6 +95,94 @@ MarkdownEdit cycleHeading(TextEditingValue value) {
     offset += line.length + 1;
   }
   return _result(text, edits, selection);
+}
+
+/// Toggles a `- [ ]` checklist on the selected lines.
+///
+/// An existing bullet or task marker is replaced in place, so the same button
+/// converts a bullet list into a checklist and back into plain text.
+MarkdownEdit toggleTaskList(TextEditingValue value) {
+  final text = value.text;
+  final selection = _selectionOf(value);
+  final span = _lineSpan(text, selection);
+  final lines = text.substring(span.start, span.end).split('\n');
+  final filled = lines.where((line) => line.trim().isNotEmpty).toList();
+  final allTasks =
+      filled.isNotEmpty && filled.every((line) => _taskItem.hasMatch(line));
+  final edits = <_Edit>[];
+  var offset = span.start;
+
+  for (final line in lines) {
+    if (line.trim().isNotEmpty) {
+      final task = _taskItem.firstMatch(line);
+      final indent = line.length - line.trimLeft().length;
+      if (allTasks) {
+        if (task != null) {
+          edits.add(_Edit(offset + task.start, offset + task.end, ''));
+        }
+      } else {
+        final bullet = task ?? _listMarker.firstMatch(line);
+        final start = offset + (bullet?.start ?? indent);
+        final end = offset + (bullet?.end ?? indent);
+        edits.add(_Edit(start, end, '- [ ] '));
+      }
+    }
+    offset += line.length + 1;
+  }
+  // A blank selection still receives a marker so the user can start typing.
+  if (!allTasks && filled.isEmpty) {
+    final indent = lines.first.length - lines.first.trimLeft().length;
+    edits.add(_Edit(span.start + indent, span.start + indent, '- [ ] '));
+  }
+  return _result(text, edits, selection);
+}
+
+/// Adds two leading spaces to every selected line.
+MarkdownEdit indentLines(TextEditingValue value) =>
+    _shiftIndent(value, outdent: false);
+
+/// Removes up to two leading spaces from every selected line.
+MarkdownEdit outdentLines(TextEditingValue value) =>
+    _shiftIndent(value, outdent: true);
+
+MarkdownEdit _shiftIndent(TextEditingValue value, {required bool outdent}) {
+  const step = 2;
+  final text = value.text;
+  final selection = _selectionOf(value);
+  final span = _lineSpan(text, selection);
+  final lines = text.substring(span.start, span.end).split('\n');
+  final edits = <_Edit>[];
+  var offset = span.start;
+
+  for (final line in lines) {
+    if (line.trim().isNotEmpty) {
+      final indent = line.length - line.trimLeft().length;
+      if (outdent) {
+        final strip = indent < step ? indent : step;
+        if (strip > 0) edits.add(_Edit(offset, offset + strip, ''));
+      } else {
+        edits.add(_Edit(offset + indent, offset + indent, ' ' * step));
+      }
+    }
+    offset += line.length + 1;
+  }
+  return _result(text, edits, selection);
+}
+
+/// Inserts a `---` divider on its own line.
+MarkdownEdit insertDivider(TextEditingValue value) =>
+    _insertStandalone(value, '---');
+
+/// Inserts an empty 2-column table with the first header cell selected.
+MarkdownEdit insertTable(TextEditingValue value) {
+  const table = '| 列 1 | 列 2 |\n| --- | --- |\n|  |  |';
+  final label = table.indexOf('列 1');
+  return _insertStandalone(
+    value,
+    table,
+    selectionStart: label,
+    selectionEnd: label + '列 1'.length,
+  );
 }
 
 /// Toggles a bullet list on the selected lines.
@@ -211,13 +333,21 @@ MarkdownFormatState inspectMarkdown(TextEditingValue value) {
 
   var bold = false;
   var italic = false;
+  var strike = false;
+  var codeSpan = false;
   var index = lineStart;
   while (index < offset) {
-    if (text.startsWith('**', index)) {
+    if (text.startsWith('~~', index)) {
+      strike = !strike;
+      index += 2;
+    } else if (text.startsWith('**', index)) {
       bold = !bold;
       index += 2;
     } else if (text[index] == '*') {
       italic = !italic;
+      index++;
+    } else if (text[index] == '`') {
+      codeSpan = !codeSpan;
       index++;
     } else {
       index++;
@@ -226,13 +356,21 @@ MarkdownFormatState inspectMarkdown(TextEditingValue value) {
   final rest = text.substring(offset, lineEnd == -1 ? text.length : lineEnd);
   bold = bold && rest.contains('**');
   italic = italic && rest.contains('*');
+  strike = strike && rest.contains('~~');
+  codeSpan = codeSpan && rest.contains('`');
 
+  // A checklist item is its own state: the bullet button must not light up
+  // alongside the checklist button, or the toolbar shows two answers.
+  final inTask = _taskItem.hasMatch(line);
   return MarkdownFormatState(
     headingLevel: headingLevel,
-    inList: _listMarker.hasMatch(line),
+    inList: !inTask && _listMarker.hasMatch(line),
+    inTask: inTask,
     inCodeBlock: fences.isOdd,
     bold: bold,
     italic: italic,
+    strike: strike,
+    codeSpan: codeSpan,
   );
 }
 
@@ -255,7 +393,8 @@ class ListContinuationFormatter extends TextInputFormatter {
       index++;
     }
     if (index >= newText.length || newText[index] != '\n') return newValue;
-    final tailMatches = newText.substring(index + 1) == oldText.substring(index);
+    final tailMatches =
+        newText.substring(index + 1) == oldText.substring(index);
     if (!tailMatches) return newValue;
     if (newValue.selection.start != index + 1) return newValue;
 
@@ -265,6 +404,29 @@ class ListContinuationFormatter extends TextInputFormatter {
 
     final bullet = _bulletItem.firstMatch(line);
     final ordered = _orderedItem.firstMatch(line);
+    // Checked items continue as unchecked ones, which is what a checklist
+    // means: the box is only ticked after the work is done.
+    if (_taskItem.firstMatch(line) case final task?) {
+      final indent = task.group(1)!;
+      final markerStart = lineStart + indent.length;
+      if (line.substring(task.end).trim().isEmpty) {
+        final text =
+            '${oldText.substring(0, markerStart)}\n'
+            '${oldText.substring(index)}';
+        return TextEditingValue(
+          text: text,
+          selection: TextSelection.collapsed(offset: markerStart),
+        );
+      }
+      final continuation = '\n$indent- [ ] ';
+      final text =
+          '${oldText.substring(0, index)}$continuation'
+          '${oldText.substring(index)}';
+      return TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: index + continuation.length),
+      );
+    }
     if (bullet == null && ordered == null) return newValue;
 
     final match = bullet ?? ordered!;
@@ -322,6 +484,31 @@ TextSelection _selectionOf(TextEditingValue value) {
   final selection = value.selection;
   if (selection.isValid) return selection;
   return TextSelection.collapsed(offset: value.text.length);
+}
+
+/// Inserts [body] as a block of its own, keeping blank lines around it so the
+/// neighbouring paragraphs stay separate.
+MarkdownEdit _insertStandalone(
+  TextEditingValue value,
+  String body, {
+  int? selectionStart,
+  int? selectionEnd,
+}) {
+  final text = value.text;
+  final selection = _selectionOf(value);
+  final start = selection.start;
+  final atLineStart = start == 0 || text[start - 1] == '\n';
+  final leading = atLineStart ? '' : '\n\n';
+  final trailing = selection.end >= text.length ? '\n' : '\n\n';
+  final bodyStart = start + leading.length;
+  final caretStart = selectionStart == null
+      ? bodyStart + body.length + trailing.length
+      : bodyStart + selectionStart;
+  final caretEnd = selectionEnd == null ? caretStart : bodyStart + selectionEnd;
+  return MarkdownEdit(
+    text: text.replaceRange(start, selection.end, '$leading$body$trailing'),
+    selection: TextSelection(baseOffset: caretStart, extentOffset: caretEnd),
+  );
 }
 
 MarkdownEdit _result(String text, List<_Edit> edits, TextSelection selection) {

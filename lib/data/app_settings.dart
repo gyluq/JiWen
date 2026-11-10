@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'custom_fonts.dart';
 import 'notes_db.dart';
 
 /// Appearance modes offered by F-46.
@@ -82,6 +83,7 @@ class AppSettings extends ChangeNotifier {
   static const _keyTheme = 'pref_theme_mode';
   static const _keyFontSize = 'pref_font_size';
   static const _keyFontFamily = 'pref_font_family';
+  static const _keyImportedFont = 'pref_imported_font';
   static const _keyHomeView = 'pref_home_view';
   static const _keyOpenNew = 'pref_open_new_note';
   static const _keyListDensity = 'pref_list_density';
@@ -89,11 +91,21 @@ class AppSettings extends ChangeNotifier {
   AppThemeChoice themeMode = AppThemeChoice.system;
   AppFontSize fontSize = AppFontSize.normal;
   AppFontFamily fontFamily = AppFontFamily.system;
+
+  /// Id of the imported font in use, or null when a built-in family is active.
+  String? importedFontId;
+
   AppHomeView homeView = AppHomeView.all;
   bool openToNewNote = false;
   AppListDensity listDensity = AppListDensity.compact;
 
   double get bodyScale => fontSize.scale;
+
+  /// Family handed to the theme; imported fonts win over the built-in ones.
+  String? get fontFamilyName {
+    final id = importedFontId;
+    return id == null ? fontFamily.family : fontFamilyFor(id);
+  }
 
   /// Reads persisted values after NotesDb.init().
   void load() {
@@ -116,6 +128,8 @@ class AppSettings extends ChangeNotifier {
       AppFontFamily.system,
       (value) => value.name,
     );
+    final imported = db.getSetting(_keyImportedFont);
+    importedFontId = imported == null || imported.isEmpty ? null : imported;
     homeView = _enumBy(
       AppHomeView.values,
       db.getSetting(_keyHomeView),
@@ -146,10 +160,32 @@ class AppSettings extends ChangeNotifier {
   }
 
   void setFontFamily(AppFontFamily value) {
-    if (fontFamily == value) return;
+    final cleared = importedFontId != null;
+    if (fontFamily == value && !cleared) return;
     fontFamily = value;
+    importedFontId = null;
     NotesDb.instance.setSetting(_keyFontFamily, value.name);
+    if (cleared) NotesDb.instance.setSetting(_keyImportedFont, '');
     notifyListeners();
+  }
+
+  /// Switches to an imported font, or back to the built-in families when
+  /// [id] is null.
+  void setImportedFont(String? id) {
+    if (importedFontId == id) return;
+    importedFontId = id;
+    NotesDb.instance.setSetting(_keyImportedFont, id ?? '');
+    notifyListeners();
+  }
+
+  /// Drops an imported font that is no longer on disk (removed file or a
+  /// restored settings row), so the app never asks for a missing family.
+  void syncImportedFont(Iterable<String> availableIds) {
+    final id = importedFontId;
+    if (id == null) return;
+    if (availableIds.contains(id)) return;
+    importedFontId = null;
+    NotesDb.instance.setSetting(_keyImportedFont, '');
   }
 
   void setHomeView(AppHomeView value) {
